@@ -1,13 +1,13 @@
-<?php 
+<?php
 /*
 Plugin Name: Scriblio III Catalog Importer
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
-Version: .02
+Version: 2.7 a
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
-/* Copyright 2007 Casey Bisson & Plymouth State University
+/* Copyright 2006 - 2008 Casey Bisson & Plymouth State University
 
 	This program is free software; you can redistribute it and/or modify 
 	it under the terms of the GNU General Public License as published by 
@@ -209,12 +209,12 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 	}
 
 	function iii_options( $record_start = FALSE, $record_end = FALSE ){
-		global $wpdb, $scrib_import;
+		global $wpdb, $scrib;
 
 		$prefs = get_option('scrib_iiiimporter');
 
 		if( !$record_start )
-			$record_start = ( 100 * round( $wpdb->get_var( 'SELECT SUBSTRING( source_id, 3 ) FROM '. $scrib_import->harvest_table .' WHERE source_id LIKE "'. $prefs['scrib_iii-sourceprefix'] .'%" ORDER BY source_id DESC LIMIT 1' ) / 100 ));
+			$record_start = ( 100 * round( $wpdb->get_var( 'SELECT SUBSTRING( source_id, 3 ) FROM '. $scrib->harvest_table .' WHERE source_id LIKE "'. $prefs['scrib_iii-sourceprefix'] .'%" ORDER BY source_id DESC LIMIT 1' ) / 100 ));
 
 		if( !$record_end )
 			$record_end = $record_start + 1000;
@@ -295,13 +295,13 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 			echo $this->iii_get_record($host, $bibn);
 			echo '</pre><h3>The Tags and Display Record:</h3><pre>';
 
-			$test_pancake = $this->iii_parse_record($this->iii_get_record($host, $bibn), $bibn);
-			print_r($test_pancake);
+			$test_pancake = $this->iii_parse_record( $this->iii_get_record( $host, $bibn ), $bibn );
+			print_r( $test_pancake );
 			echo '</pre>';
 			
-			echo '<h3>The Raw Excerpt:</h3>'. $scrib_import->the_excerpt( $test_pancake ) .'<br /><br />';
-			echo '<h3>The Raw Content:</h3>'. $scrib_import->the_content( $test_pancake ) .'<br /><br />';
-			echo '<h3>The SourceID: '. $test_pancake['the_sourceid'] .'</h3>';
+//			echo '<h3>The Raw Excerpt:</h3>'. $scrib_import->the_excerpt( $test_pancake ) .'<br /><br />';
+//			echo '<h3>The Raw Content:</h3>'. $scrib_import->the_content( $test_pancake ) .'<br /><br />';
+			echo '<h3>The SourceID: '. $test_pancake['_sourceid'] .'</h3>';
 			
 			// bring back that form
 			echo '<h2>'.__('III Options').'</h2>';
@@ -317,7 +317,7 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 			for($bibn = $prefs['scrib_iii-record_start'] ; $bibn < ($prefs['scrib_iii-record_start'] + $interval) ; $bibn++ ){
 				if($record = $this->iii_get_record( $host , $bibn )){
 					$bibr = $this->iii_parse_record( $record , $bibn );
-					echo "<li>{$bibr['the_title']} {$bibr['the_sourceid']}</li>";
+					echo "<li>{$bibr['the_title']} {$bibr['_sourceid']}</li>";
 					$count++;
 				}
 			}
@@ -456,38 +456,28 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 		echo '</div>';
 	}
 
-
-	function iii_clean($input){
-//$str = preg_replace('/\s\s+/', ' ', $str);
-//Start HKUST Customization
-//disable this str_replace, as it drastically removed the two
-//indicators if they both are blank.
-//		while(strpos($input, '  '))
-//			$input = str_replace('  ', ' ', $input);
-//End HKUST Customization
-		return($input);
-	}
-
 	function iii_parse_row($lineray){
 		$marcrow = array();
 		unset($lineray[0]);
 		foreach($lineray as $element){
 			$count[$element{0}]++;
 			$elementname = $element{0}.$count[$element{0}];
-			$marcrow[$elementname] = trim($this->iii_clean(substr($element, 1)));
+			$marcrow[$elementname] = trim( substr( $element, 1 ));
 		}
 		return($marcrow);
 	}
 
 	function iii_parse_record($marcrecord, $bibn){
-		global $scrib, $scrib_import;
+		global $scrib;
 		$prefs = get_option('scrib_iiiimporter');
-	
-		$atomic = array();
+
+		$spare_keys = array( 'a', 'b', 'c', 'd', 'e', 'f', 'g' );
+
+		$atomic = $subjtemp = array();
 		
 		$marcrecord = str_replace("\n       ", ' ', $marcrecord);
 		
-		$details = explode("\n", $marcrecord);
+		$details = explode( "\n", $marcrecord );
 		array_pop($details);
 		array_shift($details);
 
@@ -497,9 +487,6 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 			unset($marc);
 
 			$line = trim($line);
-
-//Start HKUST Customization
-//			$lineray = trim($this->iii_clean(substr($line, 0, 3) . '|' . substr($line, 4, 2) . '|a' . substr($line, 7)));
 
 			//handle romanized tags with subfield 6 - to avoid using it as the main entry, so that 880 data is used instead
 			$line = preg_replace('/^245(.*?\|6880-)/', '246\\1', $line);
@@ -515,52 +502,56 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 
 			//Remove the extra space in $line in front of the first subfield delimiter
 			$line = preg_replace('/^.{7} /', '\\1', $line);
-                        //Insert subfield delimiter and subfield code "a" if it is not present - for non-00X tags
+
+			//Insert subfield delimiter and subfield code "a" if it is not present - for non-00X tags
 			$line = preg_replace('/^([0][1-9]\d.{4})([^\|])/', '\\1|a\\2', $line);
 			$line = preg_replace('/^([1-9]\d{2}.{4})([^\|])/', '\\1|a\\2', $line);
 
-                        //Construct $lineray
+			//Construct $lineray
 			if (substr($line,7,1)=="|") {
 				$lineray = substr($line, 0, 3) . '|' . substr($line, 4, 2) . substr($line, 7);
-                        }else{
+			}else{
 				$lineray = substr($line, 0, 3) . '|' . substr($line, 4, 2) . '|a' . substr($line, 7);
 			}
-//End HKUST Customization
 
 			$lineray = explode('|', ereg_replace('\.$', '', $lineray));
 			unset($lineray[1]);
 
 			if($lineray[0] > 99)
-//Start HKUST Customization
-//				$line = trim($this->iii_clean(substr($line, 7)));
-				$line = trim($this->iii_clean($line));
-//End HKUST Customization
-			
-			// Authors
-//Start HKUST Customization
-/*
-			if(($lineray[0] == 100) || ($lineray[0] == 110)){
-				$marc = $this->iii_parse_row($lineray);
-				$temp = ereg_replace(',$', '', $marc['a1'] .' '. $marc['d1']);
-				$atomic['author'][] = $temp;
-			}else if($lineray[0] == 110){
-				$marc = $this->iii_parse_row($lineray);
-				$temp = $marc['a1'];
-				$atomic['author'][] = $temp;
-			}else if(($lineray[0] > 699) && ($lineray[0] < 721)){
-				$marc = $this->iii_parse_row($lineray);
-				$temp = ereg_replace(',$', '', $marc['a1'] .' '. $marc['d1']);
-				$atomic['author'][] = $temp;
-*/
-			if(($lineray[0] == 100) || ($lineray[0] == 700) ||
-			   ($lineray[0] == 110) || ($lineray[0] == 710) ||
-			   ($lineray[0] == 111) || ($lineray[0] == 711)){
-				$marc = $this->iii_parse_row($lineray);
-				$temp = $marc['a1'];
-				if(($lineray[0] == 100) || ($lineray[0] == 700)){
-					if ($marc['d1']) {
-						$temp .= ' ' . $marc['d1'];
+				$line = trim( $line );
+
+			// languages
+			if( $lineray[0] == '008' ){
+				$atomic['published'][0]['lang'][] = $scrib->meditor_sanitize_punctuation( substr( $lineray[2], 36,3 ));
+
+			}else if( $lineray[0] == '041' ){
+				$marc = $this->iii_parse_row( $lineray );
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'b':
+						case 'c':
+						case 'd':
+						case 'e':
+						case 'f':
+						case 'g':
+						case 'h':
+							$atomic['published'][0]['lang'][] = $scrib->meditor_sanitize_punctuation( $val );
 					}
+				}
+
+
+
+			// authors
+			}else if(($lineray[0] == 100) || ($lineray[0] == 700) || ($lineray[0] == 110) || ($lineray[0] == 710) || ($lineray[0] == 111) || ($lineray[0] == 711)){
+				$marc = $this->iii_parse_row($lineray);
+				$temp = $marc['a1'];
+				unset( $temp_role );
+				if(($lineray[0] == 100) || ($lineray[0] == 700)){
+					if($marc['d1'])
+						$temp .= ' ' . $marc['d1'];
+					if($marc['e1'])
+						$temp_role = ' ' . $marc['e1'];
 				}else if(($lineray[0] == 110) || ($lineray[0] == 710)){
 					if ($marc['b1']) {
 						$temp .= ' ' . $marc['b1'];
@@ -577,7 +568,7 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 					}
 				}
 				$temp = ereg_replace('[,|\.]$', '', $temp);
-				$atomic['author'][] = $temp;
+				$atomic['creator'][] = array( 'name' => $scrib->meditor_sanitize_punctuation( $temp ), 'role' => $temp_role ? $temp_role : 'Author' );
 
 				//handle title in name
 				$temp = '';
@@ -601,62 +592,65 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 				}
 				$temp = ereg_replace('[,|\.]$', '', $temp);
 				if (strlen($temp) >0) {
-					$atomic['alttitle'][] = $temp;
+					$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $temp ));
 				}
-//End HKUST Customization
 
 			//Standard Numbers
 			}else if($lineray[0] == 10){
 				$marc = $this->iii_parse_row($lineray);
-				$atomic['lccn'][] = $marc['a1'];
-				$atomic['bibkeys'][] = array( 'lccn' => $marc['a1'] );
+				$atomic['idnumbers'][] = array( 'type' => 'lccn', 'id' => $marc['a1'] );
+
 			}else if($lineray[0] == 20){
 				$marc = $this->iii_parse_row($lineray);
 				$temp = trim($marc['a1']) . ' ';
 				$temp = ereg_replace('[^0-9|x|X]', '', strtolower(substr($temp, 0, strpos($temp, ' '))));
-				$atomic['isbn'][] = $temp;
-				$atomic['bibkeys'][] = array( 'isbn' => $temp );
+				if( strlen( $temp ))
+					$atomic['idnumbers'][] = array( 'type' => 'isbn', 'id' => $temp );
+
 			}else if($lineray[0] == 22){
 				$marc = $this->iii_parse_row($lineray);
 				$temp = trim($marc['a1']) . ' ';
 				$temp = ereg_replace('[^0-9|x|X|\-]', '', strtolower(substr($temp, 0, strpos($temp, ' '))));
-				$atomic['issn'][] = $temp;
+				if( strlen( $temp ))
+					$atomic['idnumbers'][] = array( 'type' => 'issn', 'id' => $temp );
+
 				$temp = trim($marc['y1']) . ' ';
 				$temp = ereg_replace('[^0-9|x|X|\-]', '', strtolower(substr($temp, 0, strpos($temp, ' '))));
-				$atomic['issn'][] = $temp;
+				if( strlen( $temp ))
+					$atomic['idnumbers'][] = array( 'type' => 'issn', 'id' => $temp );
+
 				$temp = trim($marc['z1']) . ' ';
 				$temp = ereg_replace('[^0-9|x|X|\-]', '', strtolower(substr($temp, 0, strpos($temp, ' '))));
-				$atomic['issn'][] = $temp;
-				$atomic['issn'] = array_filter( $atomic['issn'] );
+				if( strlen( $temp ))
+					$atomic['idnumbers'][] = array( 'type' => 'issn', 'id' => $temp );
 			
+			//Call Numbers
+			}else if($lineray[0] == 50){
+				$marc = $this->iii_parse_row($lineray);
+				$atomic['callnumbers'][] = array( 'type' => 'lc', 'number' => implode( ' ', $marc ));
+			}else if($lineray[0] == 82){
+				$marc = $this->iii_parse_row($lineray);
+				$atomic['callnumbers'][] = array( 'type' => 'dewey', 'number' => str_replace( '/', '', $marc['a1'] ));
+
 			//Titles
+			}else if($lineray[0] == 130){
+				$marc = $this->iii_parse_row($lineray);
+				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $marc['a1'] ));
 			}else if($lineray[0] == 245){
 				$marc = $this->iii_parse_row($lineray);
-//Start HKUST Customization
-//				$temp = ucwords(trim(ereg_replace('/$', '', $marc['a1']) .' '. trim(ereg_replace('/$', '', $marc['b1']))));
 				$temp = trim(ereg_replace('/$', '', $marc['a1']) .' '. trim(ereg_replace('/$', '', $marc['b1']) .' '. trim(ereg_replace('/$', '', $marc['n1']) .' '. trim(ereg_replace('/$', '', $marc['p1'])))));
-//End HKUST Customization
-				$atomic['title'][] = $temp;
-				$atomic['attribution'][] = $marc['c1'];
+				$atomic['title'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $temp ));
+				$atomic['attribution'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $marc['c1'] ));
 			}else if($lineray[0] == 240){
 				$marc = $this->iii_parse_row($lineray);
-//Start HKUST Customization
-//				$temp = trim(ereg_replace('/$', '', $marc['a1'] .' '. $marc['b1']));
-//				$atomic['alttitle'][] = $temp;
-				$atomic['alttitle'][] = implode(' ', array_values($marc));
-//End HKUST Customization
+				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( implode(' ', array_values( $marc ))));
 			}else if($lineray[0] == 246){
-				$marc = $this->iii_parse_row($lineray);
-//Start HKUST Customization
-//				$temp = trim(ereg_replace('/$', '', $marc['a1'] .' '. $marc['b1']));
+				$marc = $this->iii_parse_row( $lineray );
 				$temp = trim(ereg_replace('/$', '', $marc['a1']) .' '. trim(ereg_replace('/$', '', $marc['b1']) .' '. trim(ereg_replace('/$', '', $marc['n1']) .' '. trim(ereg_replace('/$', '', $marc['p1'])))));
-//End HKUST Customization
-				$atomic['alttitle'][] = $temp;
+				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $temp ));
 			}else if(($lineray[0] > 719) && ($lineray[0] < 741)){
 				$marc = $this->iii_parse_row($lineray);
 				$temp = $marc['a1'];
-//Start HKUST Customization
-//				$atomic['alttitle'][] = $marc['a1'];
 				if ($marc['n1']) {
 					$temp .= ' ' .$marc['n1'];
 				}
@@ -665,32 +659,22 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 				}
 				$temp = ereg_replace('[,|\.|;]$', '', $temp);
 				if (strlen($temp) >0) {
-                                        $atomic['alttitle'][] = $temp;
-                                }
-//End HKUST Customization
+					$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $temp ));
+				}
 
-//Start HKUST Customization
-				//Edition
-				}else if($lineray[0] == 250){
-					$marc = $this->iii_parse_row($lineray);
-				$atomic['edition'][] = implode(' ', $marc);
-//End HKUST Customization
+			//Edition
+			}else if($lineray[0] == 250){
+				$marc = $this->iii_parse_row($lineray);
+				$atomic['published'][0]['edition'] = $scrib->meditor_sanitize_punctuation( implode(' ', $marc));
 
 			//Dates and Publisher
 			}else if($lineray[0] == 260){
 				$marc = $this->iii_parse_row($lineray);
-//Start HKUST Customization
 				if($marc['b1']){
-					$atomic['publisher'][] = $scrib_import->strip_punct($marc['b1']);
+					$atomic['published'][0]['publisher'][] = $scrib->meditor_sanitize_punctuation($marc['b1']);
 				}
-//End HKUST Customization
 
 				if($marc['c1']){
-//Start HKUST Customization
-//					$temp = str_pad(substr(ereg_replace('[^0-9]', '', $marc['c1']), 0, 4), 4 , '5');
-//					if( $temp < date('Y') + 2 )
-//						$atomic['pubyear'][] = $temp;
-
 					$temp ="";
 					//match for year pattern, such as "1997"
 					$matchcount=preg_match('/(\d\d\d\d)/',$marc['c1'], $matches);
@@ -710,327 +694,444 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 						}
 					}
 					if ($temp) {
-						$atomic['pubyear'][] = $temp;
-						if(!$atomic['pyear'][0])
-							$atomic['pyear'][] = $temp;
+						$atomic['published'][0]['cy'][] = $temp;
 					}
-//End HKUST Customization
 				}
 			}else if($lineray[0] == 5){
-				$atomic['acqdate'][] = $line{7}.$line{8}.$line{9}.$line{10} .'-'. $line{11}.$line{12} .'-'. $line{13}.$line{14};
+				$atomic['_acqdate'][] = $line{7}.$line{8}.$line{9}.$line{10} .'-'. $line{11}.$line{12} .'-'. $line{13}.$line{14};
 			}else if($lineray[0] == 8){
 				$temp = intval(substr($line, 14, 4));
 				if($temp)
-//Start HKUST Customization
-//					$atomic['pubyear'][] = substr($line, 14, 4);
-					$atomic['pubyear'][] = preg_replace('/[^\d]/', '0' ,substr($line, 14, 4));
-//End HKUST Customization
+					$atomic['published'][0]['cy'][] = preg_replace('/[^\d]/', '0' ,substr($line, 14, 4));
 			
 			//Subjects
+			// tag 600 - Person
+			}else if($lineray[0] == '600'){
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'q':
+							$subjtemp[] = array( 'type' => 'person', 'val' => $val );
+							break;
+
+						case 'v':
+							$subjtemp[] = array( 'type' => 'genre', 'val' => $val );
+							break;
+
+						case 'x':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'd':
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+					}
+				}
+
+			// tag 648 - Time
+			}else if($lineray[0] == '648'){
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'v':
+							$subjtemp[] = array( 'type' => 'genre', 'val' => $val );
+							break;
+
+						case 'x':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+					}
+				}
+
+			// tag 650 - Topical Terms
+			}else if( $lineray[0] == '650' ){
+				if( 6 == $line[5] )
+					continue;
+
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'b':
+						case 'x':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'c':
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+
+						case 'd':
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'v':
+							$subjtemp[] = array( 'type' => 'genre', 'val' => $val );
+							break;
+					}
+				}
+
+			// tag 651 - Geography
+			}else if($lineray[0] == '651'){
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+
+						case 'v':
+							$subjtemp[] = array( 'type' => 'genre', 'val' => $val );
+							break;
+
+						case 'e':
+						case 'x':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+					}
+				}
+
+			// tag 654 - Topical Terms
+			}else if($lineray[0] == '654'){
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'b':
+						case 'c':
+						case 'd':
+						case 'f':
+						case 'g':
+						case 'h':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+					}
+				}
+
 			// tag 655 - Genre
 			}else if($lineray[0] == '655'){
-				$marc = $this->iii_parse_row($lineray);
-				$atomic['genre'][] = $marc['a1'];
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'b':
+						case 'c':
+						case 'v':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'x':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+					}
+				}
+
+			// tag 662 - Geography
+			}else if($lineray[0] == '662'){
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'b':
+						case 'c':
+						case 'd':
+						case 'f':
+						case 'g':
+						case 'h':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+
+						case 'e':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+					}
+				}
+
 			// everything else
 			}else if(($lineray[0] > 599) && ($lineray[0] < 700)){
-				$marc = $this->iii_parse_row($lineray);
-				$atomic['subject'][] = implode(' -- ', $marc);
-				if($atomic['subjkey']){
-					$atomic['subjkey'] = array_unique(array_merge($atomic['subjkey'], array_values($marc)));
-				}else{
-					$atomic['subjkey'] = array_values($marc);
-				}	
-		
+				if( 6 == $line[5] )
+					continue;
+
+				$marc = array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), $this->iii_parse_row( $lineray ));
+
+				$subjtemp = array();
+				foreach( $marc as $key => $val ){
+					switch( $key[0] ){
+						case 'a':
+						case 'b':
+						case 'x':
+							$subjtemp[] = array( 'type' => 'subject', 'val' => $val );
+							break;
+
+						case 'v':
+						case 'k':
+							$subjtemp[] = array( 'type' => 'genre', 'val' => $val );
+							break;
+
+						case 'y':
+							$subjtemp[] = array( 'type' => 'time', 'val' => $val );
+							break;
+
+						case 'z':
+							$subjtemp[] = array( 'type' => 'place', 'val' => $val );
+							break;
+					}
+				}
+
+
 			//URLs
 			}else if($lineray[0] == 856){
 				$marc = $this->iii_parse_row($lineray);
 				unset($temp);
 				$temp['href'] = $temp['title'] = str_replace(' ', '', $marc['u1']);
-				$temp['title'] = trim(parse_url( $temp['href'] , PHP_URL_HOST), 'www.');
+				$temp['title'] = trim( parse_url( $temp['href'] , PHP_URL_HOST ), 'www.' );
 				if($marc['31'])
 					$temp['title'] = $marc['31'];
 				if($marc['z1'])
 					$temp['title'] = $marc['z1'];
-				$atomic['url'][] = '<a href="'. $temp['href'] .'">'. $temp['title'] .'</a>';
-		
+				$atomic['linked_urls'][] = array( 'name' => $temp['title'], 'href' => $temp['href'] );
+
 			//Notes
-			}else if(($lineray[0] > 299) && ($lineray[0] < 400)){
-				$marc = $this->iii_parse_row($lineray);
-				$atomic['physdesc'][] = implode(' ', array_values($marc));
-//Start HKUST Customization
-//			}else if(($lineray[0] > 399) && ($lineray[0] < 500)){
+//			}else if(($lineray[0] > 299) && ($lineray[0] < 400)){
+//				$marc = $this->iii_parse_row($lineray);
+//				$atomic['physdesc'][] = implode(' ', array_values($marc));
+
 			}else if(($lineray[0] > 399) && ($lineray[0] < 490)){
-//End HKUST Customization
 				$marc = $this->iii_parse_row($lineray);
-//Start HKUST Customization
-//				$atomic['title'][] = implode("\n", array_values($marc));
-				$atomic['series'][] = implode(" ", array_values($marc));
-//End HKUST Customization
+				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( implode(' ', array_values( $marc ))));
+
 			}else if(($lineray[0] > 799) && ($lineray[0] < 841)){
 				$marc = $this->iii_parse_row($lineray);
-				$atomic['series'][] = implode(" ", array_values($marc));
+				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( implode(' ', array_values( $marc ))));
+
 			}else if(($lineray[0] > 499) && ($lineray[0] < 600)){
-//Start HKUST Customization
-//				$line = substr($line, 7);
 				$line = substr($line, 9);
-//End HKUST Customization
 				if($lineray[0] == 504)
 					continue;
 				if($lineray[0] == 505){
-					$atomic['contents'][] = str_replace(array('> ','>  ','>   '), '>', '<li>'. str_replace('--', "</li>\n<li>", trim(str_replace(array('|t', '|r'), '', $line))) .'</li>');
+					$atomic['text'][] = array( 'type' => 'contents', 'content' => ( '<ul><li>'. implode( "</li>\n<li>", array_map( array( 'scrib', 'meditor_sanitize_punctuation' ), explode( '--', str_replace( array( '|t', '|r' , '|g' ), ' ', preg_replace( '/-[\s]+-/', '--', $line )))) ) .'</li></ul>' ));
 					continue;
 				}
-//Start HKUST Customization
+
 				//strip the subfield delimiter and codes
 				$line = preg_replace('/\|[0-9|a-z]/', ' ', $line);
-//End HKUST Customization
-				$atomic['notes'][] = $line;
+				$atomic['text'][] = array( 'type' => 'notes', 'content' => $scrib->meditor_sanitize_punctuation( $line ));
 			}
 			
+
+			// pick up the subjects parsed above
+			if( count( $subjtemp )){
+				$temp = array();
+				foreach( $subjtemp as $key => $val ){
+					$temp[ $spare_keys[ $key ] .'_type' ] = $val['type']; 
+					$temp[ $spare_keys[ $key ] ] = $val['val']; 
+				}
+				$atomic['subject'][] = $temp;
+			}
+
 			//Format
-			if((!$atomic['format']) && ($lineray[0] > 239) && ($lineray[0] < 246)){
+			if(($lineray[0] > 239) && ($lineray[0] < 246)){
 				$marc = $this->iii_parse_row($lineray);
 				$temp = ucwords(strtolower(str_replace('[', '', str_replace(']', '', $marc['h1']))));
 				
 				if(eregi('^book', $temp)){
-					$format = 'Book';
-					$formats = 'Books';
+					$atomic['format'][] = array( 'a' => 'Book' );
 
 				}else if(eregi('^micr', $temp)){
-					$format = 'Microform';
+					$atomic['format'][] = array( 'a' => 'Microform' );
 
 				}else if(eregi('^electr', $temp)){
-//Start HKUST Customization
-//					$format = 'Website';
-//					$formats = 'Websites';
-					$format = 'E-Resource';
-					$formats = 'E-Resources';
-//End HKUST Customization
+					$atomic['format'][] = array( 'a' => 'E-Resource' );
 
 				}else if(eregi('^vid', $temp)){
-					$format = 'Video';
+					$atomic['format'][] = array( 'a' => 'Video' );
 				}else if(eregi('^motion', $temp)){
-					$format = 'Video';
+					$atomic['format'][] = array( 'a' => 'Video' );
 
 				}else if(eregi('^audi', $temp)){
+					$atomic['format'][] = array( 'a' => 'Audio' );
 					$format = 'Audio';
 				}else if(eregi('^cass', $temp)){
-					$format = 'Audio';
+					$atomic['format'][] = array( 'a' => 'Audio', 'b' => 'Cassette' );
 				}else if(eregi('^phono', $temp)){
-					$format = 'Audio';
+					$atomic['format'][] = array( 'a' => 'Audio', 'b' => 'Phonograph' );
 				}else if(eregi('^record', $temp)){
-					$format = 'Audio';
+					$atomic['format'][] = array( 'a' => 'Audio', 'b' => 'Phonograph' );
 				}else if(eregi('^sound', $temp)){
-					$format = 'Audio';
+					$atomic['format'][] = array( 'a' => 'Audio' );
 
 				}else if(eregi('^carto', $temp)){
-					$format = 'Map';
-					$formats = 'Maps';
+					$atomic['format'][] = array( 'a' => 'Map' );
 				}else if(eregi('^map', $temp)){
-					$format = 'Map';
-					$formats = 'Maps';
+					$atomic['format'][] = array( 'a' => 'Map' );
 				}else if(eregi('^globe', $temp)){
-					$format = 'Map';
-					$formats = 'Maps';
-
-				}else if($temp){
-					$format = 'Classroom Material';
-					//$format = $temp;
-				}
-
-				if(!$formats)
-					$formats = $format;
-				
-				if($format){
-					$atomic['format'][] = $format;
-					$atomic['formats'][] = $formats;
+					$atomic['format'][] = array( 'a' => 'Map' );
 				}
 			}
 
-//Start HKUST Customization
-//			if($lineray[0] == '008' && substr($lineray[2], 22,1) == 'p'){
 			if($lineray[0] == '008' && (substr($lineray[2], 22,1) == 'p' || substr($lineray[2], 22,1) == 'n')){
-//End HKUST Customization
-				$atomic['format'][] = 'Journal';
-				$atomic['formats'][] = 'Journals';
+				$atomic['format'][] = array( 'a' => 'Journal' );
 			}
-
+/*
+disabled for now, no records to test against
 //Start HKUST Customization
 			// Handle tag 999 - for locations and formats
 			if ($lineray[0] == '999'){
-                                $marc = $this->iii_parse_row($lineray);
+				$marc = $this->iii_parse_row($lineray);
 				foreach($marc as $key=>$subfield){
-					if (substr($key,0,1)=='l') {
+					if ( substr($key,0,1)=='l' ) {
 						$atomic['loc'][] = $subfield;
-					} else if (substr($key,0,1)=='f') {
-						if(!$atomic['format'][0]){
+					}else if( substr($key,0,1)=='f' ) {
+						if( !$atomic['format'][0] ){
 							$atomic['format'][0] = 'Book';
 							$atomic['formats'][0] = 'Book';
 						}
-                                               	$atomic['format'][] = $subfield;
-                                                $atomic['formats'][] = $subfield;
-                                        }
-                                }
+						$atomic['format'][] = $subfield;
+						$atomic['formats'][] = $subfield;
+					}
+				}
 				$atomic['loc']=array_unique($atomic['loc']);
 				$atomic['format']=array_unique($atomic['format']);
 				$atomic['formats']=array_unique($atomic['formats']);
 			}
 //End HKUST Customization
-
+*/
 		}
 		// end the big loop
 
 
 
-		// Records without acqdates are reserves by course/professor
+		// Records without _acqdates are reserves by course/professor
 		// we _can_ import them, but they don't have enough info
 		// to be findable or display well.
-		if(!$atomic['acqdate'][0] && !$atomic['author'][0]){
+		if(!$atomic['_acqdate'][0] && !$atomic['creator'][0]){
 			$this->warn = 'Record number '. $bibn .' contains no catalog date or author info, skipped.';
-			return(FALSE);
+			return( FALSE );
 		}
-		if(count($atomic) < 4){
+		if(count( $atomic ) < 4){
 			$this->warn = 'Record number '. $bibn .' has too little cataloging data, skipped.';
-			return(FALSE);
+			return( FALSE );
 		}
-
-		// sanity check the acqdate
-		$atomic['acqdate'] = array_unique($atomic['acqdate']);
-		foreach( $atomic['acqdate'] as $key => $temp )
-			if( strtotime( $temp ) > strtotime( date('Y') + 2 ))
-				unset( $atomic['acqdate'][$key] );
-		$atomic['acqdate'] = array_values( $atomic['acqdate'] );
 
 		// sanity check the pubyear
-		$atomic['pubyear'] = array_unique($atomic['pubyear']);
-		foreach( $atomic['pubyear'] as $key => $temp )
+		foreach( array_filter( array_unique( $atomic['published'][0]['cy'] )) as $key => $temp )
 			if( $temp > date('Y') + 2 )
-				unset( $atomic['pubyear'][$key] );
-		$atomic['pubyear'] = array_values( $atomic['pubyear'] );
+				unset( $atomic['published'][0]['cy'][$key] );
+		$atomic['published'][0]['cy'] = array_shift( $atomic['published'][0]['cy'] );
+		if( empty( $atomic['published'][0]['cy'] ))
+			$atomic['published'][0]['cy'] = date('Y') - 1;
 
-		if( empty( $atomic['pubyear'][0] ))
-			if( !empty( $atomic['acqdate'][0] ))
-				$atomic['pubyear'][0] = substr( $atomic['acqdate'][0], 0, 4 );
-			else
-				$atomic['pubyear'][0] = date('Y') - 1;
-
-
-//Start HKUST Customization
-//		if(empty($atomic['pubyear'][0]))
-//			$atomic['pubyear'][0] = '1990';
-
-		if(!$atomic['acqdate'][0])
-			$atomic['acqdate'][0] = $atomic['pubyear'][0].'-01-01';
-
-		if(!$atomic['catdate'][0])
-			$atomic['catdate'][0] = $atomic['pubyear'][0].'-01-01';
-//End HKUST Customization
-
-
-		$atomic = array_filter($atomic);
 
 		if(!$atomic['format'][0])
-			$atomic['format'][0] = 'Book';
-	
-		if($atomic['pubyear'][0])
-			$atomic['pubdate'][0] = $atomic['pubyear'][0].substr($atomic['acqdate'][0],4);
+			$atomic['format'][0] = array( 'a' => 'Book' );
 
-		if($atomic['alttitle'])
-			$atomic['title'] = array_unique(array_merge($atomic['title'], $atomic['alttitle']));
-
-//Start HKUST Customization
-		if($atomic['series'])
-			$atomic['title'] = array_unique( array_merge( $atomic['title'], $atomic['series'] ));
-//End HKUST Customization
-		
-		$atomic['the_sourceid'] = substr(ereg_replace('[^a-z|0-9]', '', strtolower($_REQUEST['scrib_iii-sourceprefix'])), 0, 2) . $bibn;
-
-		if( $sweets = $scrib_import->get_sweets( $atomic['bibkeys'], $atomic['title'][0], $atomic['attribution'][0], $atomic['the_sourceid'] )){
-
-//print_r( $sweets );
-
-			foreach( $sweets->isbn as $temp)
-				$atomic['isbn'][] = $temp;
-			$atomic['isbn'] = array_unique( $atomic['isbn'] );
-
-			foreach( $sweets->lccn as $temp)
-				$atomic['lccn'][] = $temp;
-			$atomic['lccn'] = array_unique( $atomic['lccn'] );
-
-			foreach( $sweets->gbsid as $temp)
-				$atomic['gbsid'][] = $temp;
-
-			foreach( $sweets->olid as $temp)
-				$atomic['olid'][] = $temp;
-
-
-			foreach( $sweets->olrecord as $olrecord)
-				foreach( $olrecord->subject_place as $subject_place)
-					$atomic['place'][] = $subject_place;
-
-			foreach( $sweets->geotag_places as $temp)
-				$atomic['place'][] = $temp;
-			array_unique( $atomic['place'] );
-
-			foreach( $sweets->geotag_countries as $temp)
-				$atomic['country'][] = $temp;
-
-			if( !empty($sweets->image->thumb ))
-				$atomic['img'] = $sweets->image;
-			if( !empty($sweets->summary ))
-				$atomic['shortdescription'] = $sweets->summary[0] ;
+		if( $atomic['alttitle'] ){
+			$atomic['title'] = array_merge( $atomic['title'], $atomic['alttitle'] );
+			unset( $atomic['alttitle'] );
 		}
 
+		// clean up published
+		if( isset( $atomic['published'][0]['lang'] ))
+			$atomic['published'][0]['lang'] = array_shift( array_filter( $atomic['published'][0]['lang'] ));
+		if( isset( $atomic['published'][0]['publisher'] ))
+			$atomic['published'][0]['publisher'] = array_shift( array_filter( $atomic['published'][0]['publisher'] ));
+
+		// unique the values
+		foreach( $atomic as $key => $val )
+			$atomic[ $key ] = $scrib->array_unique_deep( $atomic[ $key ] );
+
+		// possibly capitalize titles
 		if( $prefs['scrib_iii-capitalize_titles'] )
-			$atomic['title'] = array_map( 'ucwords', $atomic['title'] );
+			foreach( $atomic['title'] as $key => $val )
+				$atomic['title'][ $key ]['a'] = ucwords( $val['a'] );
 
-		if(!empty($atomic['title']) && !empty($atomic['the_sourceid'])){
-			$atomic['tags']['subj'] = $atomic['subjkey'];
-			$atomic['tags']['genre'] = $atomic['genre'];
-			$atomic['tags']['place'] = $atomic['place'];
-			$atomic['tags']['country'] = $atomic['country'];
-			$atomic['tags']['auth'] = $atomic['author'];
+		// insert the sourceid
+		$atomic['_sourceid'] = substr( ereg_replace('[^a-z|0-9]', '', strtolower( $_REQUEST['scrib_iii-sourceprefix'] )), 0, 2 ) . $bibn;
+		$atomic['idnumbers'][] = array( 'type' => 'sourceid', 'id' => $atomic['_sourceid'] );
 
-			$atomic['tags']['isbn'] = $atomic['isbn'];
-			$atomic['tags']['issn'] = $atomic['issn'];
-			$atomic['tags']['loc'] = $atomic['loc'];
-			$atomic['tags']['gbsid'] = $atomic['gbsid'];
+		// sanity check the _acqdate
+		$atomic['_acqdate'] = array_unique($atomic['_acqdate']);
+		foreach( $atomic['_acqdate'] as $key => $temp )
+			if( strtotime( $temp ) > strtotime( date('Y') + 2 ))
+				unset( $atomic['_acqdate'][$key] );
+		$atomic['_acqdate'] = array_values( $atomic['_acqdate'] );
+		if( !isset( $atomic['_acqdate'][0] ))
+			if( isset( $atomic['pubyear'][0] ))
+				$atomic['_acqdate'][0] = $atomic['pubyear'][0] .'-01-01';
+			else
+				$atomic['_acqdate'][0] = ( date('Y') - 1 ) .'-01-01';
+		$atomic['_acqdate'] = $atomic['_acqdate'][0];
 
-			$atomic['tags']['title'] = $atomic['title'];
-			$atomic['tags']['format'] = $atomic['format'];
-			$atomic['tags']['pubyear'] = $atomic['pubyear'];
+		if( !empty( $atomic['title'] ) && !empty( $atomic['_sourceid'] )){
+			foreach( $atomic as $ak => $av )
+				foreach( $av as $bk => $bv )
+					if( is_array( $bv ))
+						$atomic[ $ak ][ $bk ] = array_merge( $bv, array( 'src' => 'sourceid:'. $atomic['_sourceid'] ));
 
-			$atomic['the_title'] = $atomic['title'][0];
-			$atomic['the_pubdate'] = $atomic['pubdate'][0];
-			$atomic['the_acqdate'] = $atomic['acqdate'][0];
-			$atomic['the_category'] = (int) $scrib->options['catalog_category_id'];
-
-
-//Start HKUST Customization
-// note to HKUST: nicely done.
-			//strip leading and trailing punctuations of values of facets
-			foreach ( $atomic['tags'] as $ak => $av )
-				foreach ( $av as $bk => $bv )
-					$atomic['tags'][$ak][$bk] = $scrib_import->strip_punct( $bv );
-//End HKUST Customization
-
-	
-//			$atomic['the_excerpt'] = $scrib_import->the_excerpt($atomic);
-//			$atomic['the_content'] = $scrib_import->the_content($atomic);
-
-			$scrib_import->insert_harvest($atomic);
-			return($atomic);
+			$scrib->import_insert_harvest( $atomic );
+			return( $atomic );
 		}else{
 			$this->error = 'Record number '. $bibn .' couldn&#039;t be parsed.';
 			return(FALSE);
 		}
 
 	}
-
-//Start HKUST Customization
-	//strip leading and trailing ascii punctuations
-	//function moved to $scrib_import->strip_punct() -- Casey
-//End HKUST Customization
 
 	// Default constructor 
 	function ScribIII_import() {
