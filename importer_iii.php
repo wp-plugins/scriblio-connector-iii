@@ -1,9 +1,9 @@
 <?php
 /*
-Plugin Name: Scriblio III Catalog Importer
+Plugin Name: Scriblio III Catalog Importer TEST
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
-Version: 2.7 b01
+Version: 2.7 b02
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
@@ -23,14 +23,6 @@ Author URI: http://maisonbisson.com/blog/
 	along with this program; if not, write to the Free Software 
 	Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA 
 */ 
-
-
-/*
-	Revised by K.T. Lam (lblkt@ust.hk), Head of Library Systems, The Hong Kong University of Science and Technology Library
-	Purpose: to enhance Scriblio's CJK support and to make it works with HKUST's INNOPPAC.
-	Date: 13 November 2007; 22 November 2007; 17 December 2007; 29 December 2007; 14 January 2008; 13 May 2008;
-
-*/
 
 
 
@@ -55,12 +47,18 @@ class ScribIII_import {
 				$this->greet();
 				break;
 			case 1 : 
-				$this->iii_start(); 
+				$this->iii_settings(); 
 				break;
-			case 2:
-				$this->iii_getrecords(); 
+			case 2 : 
+				$this->iii_settings_delete(); 
+				break;
+			case 3 : 
+				$this->iii_get_range(); 
+				break;
+			case 4:
+				$this->iii_get_records(); 
 				break; 
-			case 3:
+			case 5:
 				$this->ktnxbye(); 
 				break; 
 		} 
@@ -71,6 +69,7 @@ class ScribIII_import {
 
 	function header() {
 		echo '<div class="wrap">';
+		screen_icon();
 		echo '<h2>'.__('Scriblio III Importer').'</h2>';
 	}
 
@@ -78,291 +77,417 @@ class ScribIII_import {
 		echo '</div>';
 	}
 
-	function greet() {
-		$prefs = get_option('scrib_iiiimporter');
-		$prefs['scrib_iii-warnings'] = array();
-		$prefs['scrib_iii-errors'] = array();
-		$prefs['scrib_iii-record_end'] = '';
-		$prefs['scrib_iii-records_harvested'] = 0;
-		update_option('scrib_iiiimporter', $prefs);
-
-		$prefs = get_option('scrib_iiiimporter');
-
-		echo '<p>'.__('Howdy! Start here to import records from a Innovative Interfaces (III) ILS system into Scriblio.').'</p>';
-
-		echo '<form name="myform" id="myform" action="admin.php?import='. $this->importer_code .'&amp;step=1" method="post">';
-?>
-
-<table class="form-table">
-<tr valign="top">
-<th scope="row"><?php _e('The Innopac base hostname', 'scrib') ?></th>
-<td>
-<input name="scrib_iii-sourceinnopac" type="text" id="scrib_iii-sourceinnopac" value="<?php echo attribute_escape( $prefs['scrib_iii-sourceinnopac'] ); ?>" /><br />
-example: lola.plymouth.edu
-</td>
-</tr>
-
-<tr valign="top">
-<th scope="row"><?php _e('The source prefix', 'scrib') ?></th>
-<td>
-<input name="scrib_iii-sourceprefix" type="text" id="scrib_iii-sourceprefix" value="<?php echo attribute_escape( $prefs['scrib_iii-sourceprefix'] ); ?>" /><br />
-example: bb (must be two characters, a-z and 0-9 accepted)
-</td>
-</tr>
-
-</table>
-<?php
-
-		echo '<p>'.__('All Scriblio records have a &#039;sourceid,&#039; a unique alphanumeric string that&#039;s used to avoid creating duplicate records and, in some installations, link back to the source system for current availability information.').'</p>';
-		echo '<p>'.__('The sourceid is made up of two parts: the prefix that you assign, and the bib number from the Innopac. Theoretically, you chould gather records from 1,296 different systems, it&#039;s a big world.').'</p>';
-
-?>
-
-<table class="form-table">
-<tr valign="top">
-<th scope="row"><?php _e('Harvest records with', 'scrib') ?></th>
-<td>
-<input name="scrib_iii-require" type="text" id="scrib_iii-require" value="<?php echo attribute_escape( $prefs['scrib_iii-require'] ); ?>" /><br />
-example: My Library Location Name (optional; leave blank to harvest any record)<br />
-uses <a href="http://php.net/strpos">strpos</a> matching rules
-</td>
-</tr>
-
-<tr valign="top">
-<th scope="row"><?php _e('Ignore records with', 'scrib') ?></th>
-<td>
-<input name="scrib_iii-reject" type="text" id="scrib_iii-reject" value="<?php echo attribute_escape( $prefs['scrib_iii-reject'] ); ?>" /><br />
-example: No Such Record<br />
-uses <a href="http://php.net/strpos">strpos</a> matching rules 
-</td>
-</tr>
-</table>
-
-<table class="form-table">
-<tr>
-<th scope="row" class="th-full">
-<label for="scrib_iii-capitalize_titles"><input type="checkbox" name="scrib_iii-capitalize_titles" id="scrib_iii-capitalize_titles" value="1" <?php if( !empty( $prefs['scrib_iii-capitalize_titles'] )) echo 'CHECKED'; ?> /> Capitalize titles</label>
-</th>
-</tr>
-<tr>
-
-<tr>
-<th scope="row" class="th-full">
-<label for="scrib_iii-convert_encoding"><input type="checkbox" name="scrib_iii-convert_encoding" id="scrib_iii-convert_encoding" value="1" <?php if( !empty( $prefs['scrib_iii-convert_encoding'] )) echo 'CHECKED'; ?> /> Convert character encoding to UTF8</label>
-</th>
-</tr>
-</table>
-<?php
-		echo '<p>'.__('Many III web OPACs use encodings other than <a href="http://en.wikipedia.org/wiki/UTF-8">UTF8</a>. This option will attempt to convert the characters to UTF8 so that accented and non-latin characters are properly represented. However, do not use this option if your web OPAC is configured to output UTF8 characters.').'</p>';
-
-		if(!function_exists('mb_convert_encoding')){
-			echo '<br /><br />';	
-			echo '<p>'.__('This PHP install does not support <a href="http://php.net/manual/en/ref.mbstring.php">multibyte string functions</a>, including <a href="http://php.net/mb_convert_encoding">mb_convert_encoding</a>. Without that function, this importer can&#039;t convert the character encoding from records in the ILS into UTF-8. Accented characters may not import correctly.').'</p>';
-		}
-
-
-		echo '<p class="submit"><input type="submit" name="next" value="'.__('Next &raquo;').'" /></p>';
-		echo '</form>';
-
-
-		echo '<br /><br />';	
-		echo '<form action="admin.php?import=scribimporter&amp;step=3" method="post">';
-		echo '<p class="submit">or jump immediately to <input type="submit" name="next" value="'.__('Publish Harvested Records &raquo;').'" /> <br />'. __('(goes to default Scriblio importer)').'</p>';
-		echo '</form>';
-		echo '</div>';
-	}
-
 	function ktnxbye() {
-		echo '<div class="narrow">';
-		echo '<p>'.__('All done.').'</p>';
-		echo '</div>';
+		?>
+		<div class="narrow">
+		<p><?php _e('All done') ?></p>
+		</div>
+		<?php
 	}
 
-	function iii_start(){
-//note to HKUST: changed from $_POST to $_REQUEST so the script accepts either post or get variables.
-		if(empty( $_REQUEST['scrib_iii-sourceprefix'] ) || empty( $_REQUEST['scrib_iii-sourceinnopac'] )){
-			echo '<h3>'.__('Sorry, there has been an error.').'</h3>';
-			echo '<p>'.__('Please complete all fields.').'</p>';
-			return;
+	function greet() {
+		// save submitted settings if they exist
+		if( isset( $_POST['scrib_iii-delete'] ) && isset( $_POST['scrib_iii-sourceprefix'] )){
+			$save_prefs = get_option('scriblio-importer-iii') or array();
+
+			unset( $save_prefs[ str_pad( substr( preg_replace( '/[^a-z0-9]/', '', strtolower( $_POST['scrib_iii-sourceprefix'] )), 0, 2), 2, 'a', STR_PAD_LEFT ) ] );
+
+			update_option('scriblio-importer-iii', $save_prefs);
+		
+		}else if( isset( $_POST['scrib_iii-sourceinnopac'] )){
+			$save_prefs = get_option('scriblio-importer-iii') or array();
+
+			$prefs['sourceinnopac'] = ereg_replace( '[^a-z|A-Z|0-9|-|\.]', '', $_POST['scrib_iii-sourceinnopac'] );
+			$prefs['sourceprefix'] = str_pad( substr( preg_replace( '/[^a-z0-9]/', '', strtolower( $_POST['scrib_iii-sourceprefix'] )), 0, 2), 2, 'a', STR_PAD_LEFT );
+			$prefs['convert_encoding'] = isset( $_POST['scrib_iii-convert_encoding'] );
+			$prefs['bibrange_low'] = absint( $_POST['scrib_iii-bibrange_low'] );
+			$prefs['bibrange_high'] = absint( $_POST['scrib_iii-bibrange_high'] );
+			$prefs['require_import'] = $_POST['scrib_iii-require_import'];
+			$prefs['reject_import'] = $_POST['scrib_iii-reject_import'];
+			$prefs['capitalize_titles'] = isset( $_POST['scrib_iii-capitalize_titles'] );
+			$prefs['require_availability'] = $_POST['scrib_iii-require_availability'];
+			$prefs['reject_availability'] = $_POST['scrib_iii-reject_availability'];
+
+			$save_prefs[ $prefs['sourceprefix'] ] = $prefs;
+
+			update_option('scriblio-importer-iii', $save_prefs);
+
+			wp_redirect( 'admin.php?import='. $this->importer_code .'&message=1' );
 		}
 
-		if( 2 <> strlen( ereg_replace('[^a-z|A-Z|0-9]', '', $_REQUEST['scrib_iii-sourceprefix'] ))){
-			echo '<h3>'.__('Sorry, there has been an error.').'</h3>';
-			echo '<p>'.__('The source prefix must be exactly two characters, a-z and 0-9 accepted.').'</p>';
-			return;
+		echo '<p>'.__('Use this importer to harvest records from an Innovative Interfaces Incorporated ILS. Select a connection below or add a new one.').'</p>';
+
+		$save_prefs = get_option('scriblio-importer-iii');
+		if( count( $save_prefs )){
+			echo '<table class="widefat">';
+			$style = '';
+			foreach ($save_prefs as $id => $data) {
+				$style = ('class="alternate"' == $style || 'class="alternate active"' == $style) ? '' : 'alternate';
+		
+				$title = "<a href='admin.php?import=$this->importer_code&amp;step=1&amp;sourceprefix={$data['sourceprefix']}' title='edit connection settings for {$data['sourceinnopac']}'>{$data['sourceprefix']} : {$data['sourceinnopac']}</a>";
+		
+				$edit = "<a href='admin.php?import=$this->importer_code&amp;step=1&amp;sourceprefix={$data['sourceprefix']}' title='edit connection settings for {$data['sourceinnopac']}'>edit</a>";
+		
+				$delete = "<a href='admin.php?import=$this->importer_code&amp;step=2&amp;sourceprefix={$data['sourceprefix']}' title='delete the connection to {$data['sourceinnopac']}'>delete</a>";
+		
+				$import = "<a href='admin.php?import=$this->importer_code&amp;step=3&amp;sourceprefix={$data['sourceprefix']}' title='import records from Innopac {$data['sourceinnopac']}'>import</a>";
+		
+				if ($style != '')
+					$style = 'class="'.$style.'"';
+				echo "
+					<tr $style>
+						<td class='import-system row-title'>$title</td>
+						<td class='desc'>$edit | $import | $delete</td>
+					</tr>";
+			}
+			echo '</table>';
+		}else{
+			echo '<p>'. __( 'No connections configured.' ) . " <a href='admin.php?import=$this->importer_code&amp;step=1' title='add a new connection'>". __( 'Create a new one?' ) .'</a></p>';
 		}
 
-		// save these settings so we can try them again later
-		$prefs = get_option('scrib_iiiimporter');
-		$prefs['scrib_iii-sourceprefix'] = strtolower(ereg_replace('[^a-z|A-Z|0-9]', '', $_REQUEST['scrib_iii-sourceprefix']));
-		stripslashes($_REQUEST['scrib_iii-sourceprefix']);
-		$prefs['scrib_iii-sourceinnopac'] = ereg_replace('[^a-z|A-Z|0-9|-|\.]', '', $_REQUEST['scrib_iii-sourceinnopac']);
-		$prefs['scrib_iii-convert_encoding'] = isset( $_REQUEST['scrib_iii-convert_encoding'] );
-
-		$prefs['scrib_iii-require'] = $_REQUEST['scrib_iii-require'];
-		$prefs['scrib_iii-reject'] = $_REQUEST['scrib_iii-reject'];
-		$prefs['scrib_iii-capitalize_titles'] = isset( $_REQUEST['scrib_iii-capitalize_titles'] );
-		update_option('scrib_iiiimporter', $prefs);
-
-
-		$this->iii_options();
+		echo "<p><a href='admin.php?import=$this->importer_code&amp;step=1' title='add a new connection'>". __( 'Create a new connection' ) .'</a></p>';
+	
 	}
 
-	function iii_options( $record_start = FALSE, $record_end = FALSE ){
+	function iii_settings() {
+		$prefs = get_option('scriblio-importer-iii');
+		if( 
+			isset( $_GET['sourceprefix'] ) 
+			&& 
+			is_array( $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ] )
+		)
+				$prefs = $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ];
+		else
+			$prefs = array();
+
+?>
+		<form name="myform" id="myform" action="admin.php?import=<?php echo $this->importer_code; ?>" method="post">
+
+		<h3><?php _e('Innopac'); ?></h3>
+
+		<table class="form-table">
+		<tr valign="top">
+		<th scope="row"><?php _e('The Innopac base hostname', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-sourceinnopac" type="text" id="scrib_iii-sourceinnopac" value="<?php echo attribute_escape( $prefs['sourceinnopac'] ); ?>" /><br />example: lola.plymouth.edu
+		</td>
+		</tr>
+		
+		<tr valign="top">
+		<th scope="row"><?php _e('The source prefix', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-sourceprefix" type="text" id="scrib_iii-sourceprefix" value="<?php echo attribute_escape( $prefs['sourceprefix'] ); ?>" /><br />
+		example: bb (must be two characters, a-z accepted)
+		</td>
+		</tr>
+		
+<?php if( function_exists( 'mb_convert_encoding' )){ ?>
+		<tr>
+		<th scope="row" class="th-full"><label for="scrib_iii-convert_encoding">Convert character encoding</label></th>
+		<td><input type="checkbox" name="scrib_iii-convert_encoding" id="scrib_iii-convert_encoding" value="1" <?php if( !empty( $prefs['convert_encoding'] )) echo 'CHECKED'; ?> /><br />
+<?php
+
+		_e('Many III web OPACs use encodings other than <a href="http://en.wikipedia.org/wiki/UTF-8">UTF8</a>. This option will attempt to convert the characters to UTF8 so that accented and non-latin characters are properly represented. However, do not use this option if your web OPAC is configured to output UTF8 characters.');
+
+		?>
+		</td>
+		</tr>
+<?php } ?>
+		</table>
+		
+
+		<h3><?php _e('Importing') ?></h3>
+
+		<table class="form-table">
+		<tr valign="top">
+		<th scope="row"><?php _e('Bib record number range', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-bibrange_low" type="text" id="scrib_iii-bibrange_low" value="<?php echo attribute_escape( $prefs['bibrange_low'] ); ?>" /> to <input name="scrib_iii-bibrange_high" type="text" id="scrib_iii-bibrange_high" value="<?php echo attribute_escape( $prefs['bibrange_high'] ); ?>" /><br />
+		example: 1000000 to 1400000 (the Innopac's lowest bibnumber to the highest number you're likely to see in a few years)
+		</td>
+		</tr>
+
+		<tr valign="top">
+		<th scope="row"><?php _e('Harvest records with', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-require_import" type="text" id="scrib_iii-require_import" value="<?php echo attribute_escape( $prefs['require_import'] ); ?>" /><br />
+		example: My Library Location Name (optional; leave blank to harvest any record)<br />
+		uses <a href="http://php.net/strpos">strpos</a> matching rules
+		</td>
+		</tr>
+		
+		<tr valign="top">
+		<th scope="row"><?php _e('Ignore records with', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-reject_import" type="text" id="scrib_iii-reject_import" value="<?php echo attribute_escape( $prefs['reject_import'] ); ?>" /><br />
+		example: No Such Record<br />
+		uses <a href="http://php.net/strpos">strpos</a> matching rules 
+		</td>
+		</tr>
+
+		<tr>
+		<th scope="row" class="th-full"><label for="scrib_iii-capitalize_titles">Capitalize titles</label></th>
+		<td><input type="checkbox" name="scrib_iii-capitalize_titles" id="scrib_iii-capitalize_titles" value="1" <?php if( !empty( $prefs['capitalize_titles'] )) echo 'CHECKED'; ?> /></td>
+		</tr>
+		</table>
+
+
+		<h3><?php _e('Availability') ?></h3>
+
+		<table class="form-table">
+		<tr valign="top">
+		<th scope="row"><?php _e('Show items with', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-require_availability" type="text" id="scrib_iii-require_availability" value="<?php echo attribute_escape( $prefs['require_availability'] ); ?>" /><br />
+		example: My Library Location Name (optional; leave blank to harvest any record)<br />
+		uses <a href="http://php.net/strpos">strpos</a> matching rules
+		</td>
+		</tr>
+		
+		<tr valign="top">
+		<th scope="row"><?php _e('Ignore items with', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-reject_availability" type="text" id="scrib_iii-reject_availability" value="<?php echo attribute_escape( $prefs['reject_availability'] ); ?>" /><br />
+		example: No Such Record<br />
+		uses <a href="http://php.net/strpos">strpos</a> matching rules 
+		</td>
+		</tr>
+		</table>
+		<?php
+
+		echo '<p class="submit"><a href="admin.php?import='. $this->importer_code .'">Cancel</a> &nbsp; <input type="submit" name="next" value="'.__('Save').'" /></p>';
+		echo '</form>';
+	}
+
+	function iii_settings_delete() {
+		$prefs = get_option('scriblio-importer-iii');
+		if( 
+			isset( $_GET['sourceprefix'] ) 
+			&& 
+			is_array( $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ] )
+		){
+			$prefs = $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ];
+?>
+			<h3><?php _e('Really delete this connection?'); ?></h3>
+			<p><?php echo $prefs['sourceinnopac']; ?></p>
+
+			<form name="myform" id="myform" action="admin.php?import=<?php echo $this->importer_code; ?>" method="post">
+	
+			<input name="scrib_iii-sourceprefix" type="hidden" id="scrib_iii-sourceprefix" value="<?php echo attribute_escape( $prefs['sourceprefix'] ); ?>" />
+
+			<input name="scrib_iii-delete" type="hidden" id="scrib_iii-delete" value="1" />
+	
+			<p class="submit"><a href="admin.php?import=<?php echo $this->importer_code; ?>">Cancel</a> &nbsp; <input type="submit" name="next" value="<?php _e('Delete'); ?>"/></p>
+			</form>
+<?php
+		}else{
+?>	
+			<p class="submit"><?php _e('Um, what?'); ?> <a href="admin.php?import=<?php echo $this->importer_code; ?>"><?php _e('Try again'); ?></a></p>
+
+<?php
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	function iii_get_range( $record_start = FALSE, $record_end = FALSE ){
 		global $wpdb, $scrib;
 
-		$prefs = get_option('scrib_iiiimporter');
+		$prefs = get_option('scriblio-importer-iii');
+		if( 
+			isset( $_GET['sourceprefix'] ) 
+			&& 
+			is_array( $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ] )
+		){
+			$prefs = $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ];
 
-		if( !$record_start )
-			$record_start = ( 100 * round( $wpdb->get_var( 'SELECT SUBSTRING( source_id, 3 ) FROM '. $scrib->harvest_table .' WHERE source_id LIKE "'. $prefs['scrib_iii-sourceprefix'] .'%" ORDER BY source_id DESC LIMIT 1' ) / 100 ));
-
-		if( !$record_end )
-			$record_end = $record_start + 1000;
-
-		echo '<form name="myform" id="myform" action="admin.php?import='. $this->importer_code .'&amp;step=2" method="post">';
-?>
-<table class="form-table">
-
-<tr valign="top">
-<th scope="row"><?php _e('Start with bib number', 'scrib') ?></th>
-<td>
-<input type="text" name="scrib_iii-record_start" id="scrib_iii-record_start" value="<?php echo attribute_escape( $record_start ); ?>" /><br />
-</td>
-</tr>
-
-<tr valign="top">
-<th scope="row"><?php _e('End', 'scrib') ?></th>
-<td>
-<input type="text" name="scrib_iii-record_end" id="scrib_iii-record_end" value="<?php echo attribute_escape( $record_end ); ?>" />
-</td>
-</tr>
-
-</table>
-<table class="form-table">
-
-<tr>
-<th scope="row" class="th-full">
-<label for="scrib_iii-debug"><input type="checkbox" name="scrib_iii-debug" id="scrib_iii-debug" value="1" = /> Debug mode</label>
-</th>
-</tr>
-<tr>
-</table>
-
-<input type="hidden" name="scrib_iii-sourceprefix" id="scrib_iii-sourceprefix" value="<?php echo attribute_escape( $prefs['scrib_iii-sourceprefix'] ); ?>" />
-<input type="hidden" name="scrib_iii-sourceinnopac" id="scrib_iii-sourceinnopac" value="<?php echo attribute_escape( $prefs['scrib_iii-sourceinnopac'] ); ?>" />
-<?php
-		echo '<p class="submit"><input type="submit" name="next" value="'.__('Next &raquo;').'" /></p>';
-		echo '</form>';
-
-//exit;
-	}
-
-	function iii_getrecords(){
-		global $wpdb, $scrib_import;
-//note to HKUST: changed from $_POST to $_REQUEST so the script accepts either post or get variables.
-
-		if(empty($_REQUEST['scrib_iii-sourceprefix']) || empty($_REQUEST['scrib_iii-sourceinnopac']) || empty($_REQUEST['scrib_iii-record_start'])){
-			echo '<p>'.__('Sorry, there has been an error.').'</p>';
-			echo '<p><strong>Please complete all fields</strong></p>';
-			return;
-		}
-
-		// save these settings so we can try them again later
-		$prefs = get_option('scrib_iiiimporter');
-		$prefs['scrib_iii-record_start'] = (int) $_REQUEST['scrib_iii-record_start'];
-		$prefs['scrib_iii-record_end'] = (int) $_REQUEST['scrib_iii-record_end'];
-		update_option('scrib_iiiimporter', $prefs);
-
-		$interval = 25;
-		if( !$prefs['scrib_iii-record_end'] || ( $prefs['scrib_iii-record_end'] == $prefs['scrib_iii-record_start'] ))
-			$_REQUEST['scrib_iii-debug'] = TRUE;
-		if( !$prefs['scrib_iii-record_end'] || ( $prefs['scrib_iii-record_end'] - $prefs['scrib_iii-record_start'] < $interval ))
-			$interval = $prefs['scrib_iii-record_end'] - $prefs['scrib_iii-record_start'];
-		if( $prefs['scrib_iii-record_end'] - $prefs['scrib_iii-record_start'] < 1 )
-			$interval = 0;
-
-		ini_set('memory_limit', '1024M');
-		set_time_limit(0);
-		ignore_user_abort(TRUE);
-		error_reporting(E_ERROR);
-
-		if( !empty( $_REQUEST['scrib_iii-debug'] )){
-
-			$host =  $prefs['scrib_iii-sourceinnopac'];
-			$bibn = (int) $prefs['scrib_iii-record_start'];
-
-			echo '<h3>The III Record:</h3><pre>';			
-			echo $this->iii_get_record($host, $bibn);
-			echo '</pre><h3>The Tags and Display Record:</h3><pre>';
-
-			$test_pancake = $this->iii_parse_record( $this->iii_get_record( $host, $bibn ), $bibn );
-			print_r( $test_pancake );
-			echo '</pre>';
-			
-//			echo '<h3>The Raw Excerpt:</h3>'. $scrib_import->the_excerpt( $test_pancake ) .'<br /><br />';
-//			echo '<h3>The Raw Content:</h3>'. $scrib_import->the_content( $test_pancake ) .'<br /><br />';
-			echo '<h3>The SourceID: '. $test_pancake['_sourceid'] .'</h3>';
-			
-			// bring back that form
-			echo '<h2>'.__('III Options').'</h2>';
-			$this->iii_options();
-		
-		}else{
-			// import with status
-			$host =  ereg_replace('[^a-z|A-Z|0-9|-|\.]', '', $_REQUEST['scrib_iii-sourceinnopac']);
-
-			$count = 0;
-			echo "<p>Reading a batch of $interval records from {$prefs['scrib_iii-sourceinnopac']}. Please be patient.<br /><br /></p>";
-			echo '<ol>';
-			for($bibn = $prefs['scrib_iii-record_start'] ; $bibn < ($prefs['scrib_iii-record_start'] + $interval) ; $bibn++ ){
-				if($record = $this->iii_get_record( $host , $bibn )){
-					$bibr = $this->iii_parse_record( $record , $bibn );
-					echo "<li>{$bibr['the_title']} {$bibr['_sourceid']}</li>";
-					$count++;
+			if( !$record_start ){
+				$harvested_max = $wpdb->get_var( 'SELECT SUBSTRING( source_id, 3 ) FROM '. $scrib->harvest_table .' WHERE source_id LIKE "'. $wpdb->escape( $prefs['sourceprefix'] ) .'%" ORDER BY source_id DESC LIMIT 1' );
+	
+				if( $harvested_max ){
+					$record_start = ( 100 * absint( $harvested_max / 100 ));
+	
+					if( !$record_end )
+						$record_end = $record_start + 1000;
+				}else{
+					$record_start = $prefs['bibrange_low'];
+					$record_end = $prefs['bibrange_high'];
 				}
 			}
-			echo '</ol>';
+
+			echo '<form name="myform" id="myform" action="admin.php?import='. $this->importer_code .'&amp;step=4&amp;sourceprefix='. $_GET['sourceprefix'] .'" method="post">';
+			?>
+		
+			<h3><?php _e('Importing records from:'); ?> <?php echo $prefs['sourceprefix']; ?> : <?php echo $prefs['sourceinnopac']; ?></h3>
+
+			<table class="form-table">
 			
-			$prefs['scrib_iii-warnings'] = array_merge($prefs['scrib_iii-warnings'], $this->warn);
-			$prefs['scrib_iii-errors'] = array_merge($prefs['scrib_iii-errors'], $this->error);
-			$prefs['scrib_iii-records_harvested'] = $prefs['scrib_iii-records_harvested'] + $count;
-			update_option('scrib_iiiimporter', $prefs);
+			<tr valign="top">
+			<th scope="row"><?php _e('Start with bib number', 'scrib') ?></th>
+			<td>
+			<input type="text" name="scrib_iii-record_start" id="scrib_iii-record_start" value="<?php echo attribute_escape( $record_start ); ?>" /><br />
+			</td>
+			</tr>
+			
+			<tr valign="top">
+			<th scope="row"><?php _e('End', 'scrib') ?></th>
+			<td>
+			<input type="text" name="scrib_iii-record_end" id="scrib_iii-record_end" value="<?php echo attribute_escape( $record_end ); ?>" />
+			</td>
+			</tr>
+			
+			</table>
+			<table class="form-table">
+			
+			<tr>
+			<th scope="row" class="th-full">
+			<label for="scrib_iii-debug"><input type="checkbox" name="scrib_iii-debug" id="scrib_iii-debug" value="1" = /> Debug mode</label>
+			</th>
+			</tr>
+			<tr>
+			</table>
 
-			if( $bibn < $prefs['scrib_iii-record_end'] ){
-				$prefs['scrib_iii-record_start'] = $prefs['scrib_iii-record_start'] + $interval;
-				update_option('scrib_iiiimporter', $prefs);
+			<p class="submit"><a href="admin.php?import=<?php echo $this->importer_code; ?>">Cancel</a> &nbsp; <input type="submit" name="next" value="<?php _e('Next &raquo;'); ?>"/></p>
 
-				$this->iii_options( $prefs['scrib_iii-record_start'], $prefs['scrib_iii-record_end'] );
-				?>
-				<div class="narrow"><p><?php _e("If your browser doesn't start loading the next page automatically click this link:"); ?> <a href="javascript:nextpage()"><?php _e("Next Records"); ?></a> </p>
-				<script language='javascript'>
-				<!--
-	
-				function nextpage() {
-					document.getElementById('myform').submit();
-				}
-				setTimeout( "nextpage()", 1250 );
-	
-				//-->
-				</script>
-				</div>
+			</form>
+			<?php
+		}else{
+?>	
+			<p class="submit"><?php _e('Um, what?'); ?> <a href="admin.php?import=<?php echo $this->importer_code; ?>"><?php _e('Try again'); ?></a></p>
+
 <?php
-				echo '<pre>';
-				print_r( $wpdb->queries );
-				echo '<br /><br />';
-				print_r( $scrib_import->queries );
+		}
+	}
+
+	function iii_get_records(){
+		global $wpdb, $scrib;
+
+		$prefs = get_option('scriblio-importer-iii');
+		if( 
+			isset( $_GET['sourceprefix'] ) 
+			&& 
+			is_array( $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ] )
+		){
+			$prefs = $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ];
+
+			$interval = 25;
+			if( !$_REQUEST['scrib_iii-record_end'] || ( $_REQUEST['scrib_iii-record_end'] == $prefs['scrib_iii-record_start'] ))
+				$_REQUEST['scrib_iii-debug'] = TRUE;
+			if( !$_REQUEST['scrib_iii-record_end'] || ( $_REQUEST['scrib_iii-record_end'] - $_REQUEST['scrib_iii-record_start'] < $interval ))
+				$interval = $_REQUEST['scrib_iii-record_end'] - $_REQUEST['scrib_iii-record_start'];
+			if( $_REQUEST['scrib_iii-record_end'] - $_REQUEST['scrib_iii-record_start'] < 1 )
+				$interval = 0;
+	
+			ini_set('memory_limit', '1024M');
+			set_time_limit(0);
+			ignore_user_abort(TRUE);
+			error_reporting(E_ERROR);
+	
+			if( !empty( $_REQUEST['scrib_iii-debug'] )){
+	
+				$host =  $prefs['sourceinnopac'];
+				$bibn = (int) $_REQUEST['scrib_iii-record_start'];
+	
+				echo '<h3>The III Record:</h3><pre>';			
+				echo $this->iii_get_record($host, $bibn);
+				echo '</pre><h3>The Tags and Display Record:</h3><pre>';
+	
+				$test_pancake = $this->iii_parse_record( $this->iii_get_record( $host, $bibn ), $bibn );
+				print_r( $test_pancake );
 				echo '</pre>';
-				?><?php echo get_num_queries(); ?> queries. <?php timer_stop(1); ?> seconds. <?php
+
+				echo '<h3>The SourceID: '. $test_pancake['_sourceid'] .'</h3>';
+				
+				// bring back that form
+				echo '<h2>'.__('III Options').'</h2>';
+				$this->iii_get_range();
+			
 			}else{
-				$this->iii_done();
-				?>
-				<script language='javascript'>
-				<!--
-					window.location='#complete';
-				//-->
-				</script>
-				</div>
-				<?php
+				// import with status
+				$host =  $prefs['sourceinnopac'];
+	
+				$count = 0;
+				echo "<p>Reading a batch of $interval records from {$prefs['sourceinnopac']}. Please be patient.<br /><br /></p>";
+				echo '<ol>';
+				for( $bibn = (int) $_REQUEST['scrib_iii-record_start'] ; $bibn < ( $_REQUEST['scrib_iii-record_start'] + $interval ) ; $bibn++ ){
+					if($record = $this->iii_get_record( $host , $bibn )){
+						$bibr = $this->iii_parse_record( $record , $bibn );
+						echo "<li>{$bibr['the_title']} {$bibr['_sourceid']}</li>";
+						$count++;
+					}
+				}
+				echo '</ol>';
+				
+//				$prefs['scrib_iii-warnings'] = array_merge($prefs['scrib_iii-warnings'], $this->warn);
+//				$prefs['scrib_iii-errors'] = array_merge($prefs['scrib_iii-errors'], $this->error);
+//				$prefs['scrib_iii-records_harvested'] = $prefs['scrib_iii-records_harvested'] + $count;
+//				update_option('scrib_iiiimporter', $prefs);
+	
+				if( $bibn < $_REQUEST['scrib_iii-record_end'] ){
+					$_REQUEST['scrib_iii-record_start'] = $_REQUEST['scrib_iii-record_start'] + $interval;
+	
+					$this->iii_get_range( $_REQUEST['scrib_iii-record_start'], $_REQUEST['scrib_iii-record_end'] );
+					?>
+					<div class="narrow"><p><?php _e("If your browser doesn't start loading the next page automatically click this link:"); ?> <a href="javascript:nextpage()"><?php _e("Next Records"); ?></a> </p>
+					<script language='javascript'>
+					<!--
+		
+					function nextpage() {
+						document.getElementById('myform').submit();
+					}
+					setTimeout( "nextpage()", 1250 );
+		
+					//-->
+					</script>
+					</div>
+	<?php
+					echo '<pre>';
+					print_r( $wpdb->queries );
+					echo '<br /><br />';
+					print_r( $scrib_import->queries );
+					echo '</pre>';
+					?><?php echo get_num_queries(); ?> queries. <?php timer_stop(1); ?> seconds. <?php
+				}else{
+					$this->iii_done();
+					?>
+					<script language='javascript'>
+					<!--
+						window.location='#complete';
+					//-->
+					</script>
+					</div>
+					<?php
+				}
 			}
 		}
 	}
@@ -375,10 +500,10 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 		// see if it matches the require/reject preferences
 		$test_record = file_get_contents('http://'. $host .'/record=b'. $bibn);
 
-		if( $prefs['scrib_iii-require'] && !strpos( $test_record, $prefs['scrib_iii-require'] ))
+		if( $prefs['require_import'] && !strpos( $test_record, $prefs['require_import'] ))
 			return(FALSE);
 
-		if( $prefs['scrib_iii-reject'] && strpos( $test_record, $prefs['scrib_iii-reject'] ))
+		if( $prefs['reject_import'] && strpos( $test_record, $prefs['reject_import'] ))
 			return(FALSE);
 
 
@@ -386,7 +511,7 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 		$recordurl = 'http://'. $host .'/search/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/marc~b'. $bibn;
 
 //note to HKUST: Added an option to enabled utf8 encoding
-		if( $prefs['scrib_iii-convert_encoding'] && function_exists( 'mb_convert_encoding' ))
+		if( $prefs['convert_encoding'] && function_exists( 'mb_convert_encoding' ))
 			$record = mb_convert_encoding( file_get_contents( $recordurl ), 'UTF-8', 'LATIN1, ASCII, ISO-8859-1, UTF-8');
 		else
 			$record = file_get_contents($recordurl);
@@ -428,31 +553,31 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 		// click next
 		echo '<div class="narrow">';
 
-		if(count($prefs['scrib_iii-warnings'])){
+		if(count($prefs['warnings'])){
 			echo '<h3 id="warnings">Warnings</h3>';
 			echo '<a href="#complete">bottom</a> &middot; <a href="#errors">errors</a>';
 			echo '<ol><li>';
-			echo implode($prefs['scrib_iii-warnings'], '</li><li>');
+			echo implode($prefs['warnings'], '</li><li>');
 			echo '</li></ol>';
 		}
 
-		if(count($prefs['scrib_iii-errors'])){
+		if(count($prefs['errors'])){
 			echo '<h3 id="errors">Errors</h3>';
 			echo '<a href="#complete">bottom</a> &middot; <a href="#warnings">warnings</a>';
 			echo '<ol><li>';
-			echo implode($prefs['scrib_iii-errors'], '</li><li>');
+			echo implode($prefs['errors'], '</li><li>');
 			echo '</li></ol>';
 		}		
 
 		echo '<h3 id="complete">'.__('Processing complete.').'</h3>';
-		echo '<p>'. $prefs['scrib_iii-records_harvested'] .' '.__('records harvested.').' with '. count($prefs['scrib_iii-warnings']) .' <a href="#warnings">warnings</a> and '. count($prefs['scrib_iii-errors']) .' <a href="#errors">errors</a>.</p>';
-
+		echo '<p>'. $prefs['records_harvested'] .' '.__('records harvested.').' with '. count($prefs['warnings']) .' <a href="#warnings">warnings</a> and '. count($prefs['errors']) .' <a href="#errors">errors</a>.</p>';
+/*
 		echo '<p>'.__('Continue to the next step to publish those harvested catalog entries.').'</p>';
 
 		echo '<form action="admin.php?import=scribimporter&amp;step=3" method="post">';
 		echo '<p class="submit"><input type="submit" name="next" value="'.__('Publish Harvested Records &raquo;').'" /> <br />'. __('(goes to default Scriblio importer)').'</p>';
 		echo '</form>';
-
+*/
 		echo '</div>';
 	}
 
@@ -467,12 +592,16 @@ uses <a href="http://php.net/strpos">strpos</a> matching rules
 		return($marcrow);
 	}
 
-	function iii_parse_record($marcrecord, $bibn){
+	function iii_parse_record( &$marcrecord, &$bibn ){
 		global $scrib;
-		$prefs = get_option('scrib_iiiimporter');
+
+		$prefs = get_option('scriblio-importer-iii');
+		if( !isset( $_GET['sourceprefix'] ) || !is_array( $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ] ))
+			die( FALSE );
+
+		$prefs = $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ];
 
 		$spare_keys = array( 'a', 'b', 'c', 'd', 'e', 'f', 'g' );
-
 		$atomic = $subjtemp = array();
 		
 		$marcrecord = str_replace("\n       ", ' ', $marcrecord);
@@ -1097,12 +1226,12 @@ disabled for now, no records to test against
 			$atomic[ $key ] = $scrib->array_unique_deep( $atomic[ $key ] );
 
 		// possibly capitalize titles
-		if( $prefs['scrib_iii-capitalize_titles'] )
+		if( $prefs['capitalize_titles'] )
 			foreach( $atomic['title'] as $key => $val )
 				$atomic['title'][ $key ]['a'] = ucwords( $val['a'] );
 
 		// insert the sourceid
-		$atomic['_sourceid'] = substr( ereg_replace('[^a-z|0-9]', '', strtolower( $_REQUEST['scrib_iii-sourceprefix'] )), 0, 2 ) . $bibn;
+		$atomic['_sourceid'] = $prefs['sourceprefix'] . $bibn;
 		$atomic['idnumbers'][] = array( 'type' => 'sourceid', 'id' => $atomic['_sourceid'] );
 
 		// sanity check the _acqdate
@@ -1133,6 +1262,25 @@ disabled for now, no records to test against
 
 	}
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	// Default constructor 
 	function ScribIII_import() {
 		// nothing
@@ -1146,19 +1294,9 @@ if(function_exists('register_importer')) {
 	register_importer($scribiii_import->importer_code, $scribiii_import->importer_name, $scribiii_import->importer_desc, array (&$scribiii_import, 'dispatch')); 
 } 
 
-add_action('activate_'.plugin_basename(__FILE__), 'scribiii_importer_activate'); 
-
 function scribiii_importer_activate() { 
 	global $wp_db_version, $scribiii_import; 
-	 
-	// Deactivate on pre 2.3 blogs 
-	if($wp_db_version<6075) { 
-		$current = get_settings('active_plugins'); 
-		array_splice($current, array_search( plugin_basename(__FILE__), $current), 1 ); 
-		update_option('active_plugins', $current); 
-		do_action('deactivate_'.plugin_basename(__FILE__));		 
-		return(FALSE);
-	}
 } 
+add_action('activate_'.plugin_basename(__FILE__), 'scribiii_importer_activate'); 
 
 ?>
