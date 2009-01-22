@@ -3,7 +3,7 @@
 Plugin Name: Scriblio III Catalog Importer
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
-Version: 2.7 a
+Version: 2.7 b01
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
