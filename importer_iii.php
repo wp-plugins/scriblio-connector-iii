@@ -1,9 +1,9 @@
 <?php
 /*
-Plugin Name: Scriblio III Catalog Importer TEST
+Plugin Name: Scriblio III Catalog Importer
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
-Version: 2.7 b02
+Version: 2.7 b03
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
@@ -24,7 +24,11 @@ Author URI: http://maisonbisson.com/blog/
 	Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA 
 */ 
 
-
+/*
+	Includes contributions by K.T. Lam (lblkt@ust.hk), Head of Library Systems, The Hong Kong University of Science and Technology Library
+	Purpose: to enhance Scriblio's CJK support and to make it works with HKUST's INNOPPAC.
+	Date: 13 November 2007; 22 November 2007; 17 December 2007; 29 December 2007; 14 January 2008; 13 May 2008;
+*/
 
 // The importer 
 class ScribIII_import { 
@@ -287,37 +291,6 @@ class ScribIII_import {
 <?php
 		}
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 	function iii_get_range( $record_start = FALSE, $record_end = FALSE ){
@@ -1263,27 +1236,123 @@ disabled for now, no records to test against
 	}
 
 
+	function iii_availability( &$post_id, &$sourceid ){
+		global $scrib;
 
+		$prefs = get_option('scriblio-importer-iii');
+		$prefs = $prefs[ substr( $sourceid, 0, 2 ) ];
 
+//		$scrib_import->update_record( $id );
 
+		$bibn = substr( $sourceid, 2 );
 
+		$cache = wp_cache_get( $sourceid , 'scrib_availability' );
+		
+		if( !is_array( $cache )){
+			
+			$raw = file_get_contents( 'http://'. $prefs['sourceinnopac'] .'/record='. $bibn );
 
+			// detect deleted record
+			if( strpos( $raw, $prefs['reject_import'] )){
+				global $wpdb;
+	
+				// set the post to draft (might oughta use a WP function instead of writing to DB)
+				$wpdb->get_results( "UPDATE $wpdb->posts SET post_status = 'draft' WHERE ID = $post_id" );
+	
+				// clear the post/page cache
+				clean_page_cache( $post_id );
+				clean_post_cache( $post_id );
+	
+				// do the post transition
+				wp_transition_post_status( 'draft', 'publish', $post_id );
+	
+				// tell the user the book isn't available
+				return( 'This item is no longer available at this library.' );
+			}
 
+			// clean up all the damn comments and spaces
+			$raw = preg_replace( '/<!--[^-]*-->/Usi', '', $raw);
+			$raw = preg_replace( '/&nbsp;/Usi', '', $raw);
 
+			// get the attached items and their availability
+			preg_match_all( '/<tr[^>]*class="bibItemsEntry">(.*)<\/tr>/Usi', $raw, $itemrows );
+			foreach( $itemrows[1] as $item ){
+				preg_match_all( '/<td[^>]*>(.*)<\/td>/Usi', $item, $matches );
 
+				if( !empty( $prefs['reject_availability'] ) && strpos( $item, $prefs['reject_availability'] ))
+					continue;
 
+				if( !empty( $prefs['require_availability'] ))
+					if( strpos( $item, $prefs['require_availability'] ))
+						$items[ $matches[1][0] ][] = array( 'location' => trim( strip_tags( $matches[1][0] )), 'callnumber' => trim( strip_tags( $matches[1][1] )), 'status' => trim( strip_tags( $matches[1][2] )));
+					else
+						continue;
+				else
+					$items[ $matches[1][0] ][] = array( 'location' => trim( strip_tags( $matches[1][0] )), 'callnumber' => trim( strip_tags( $matches[1][1] )), 'status' => trim( strip_tags( $matches[1][2] )));
+			}
+			$items = array_values( $items );
 
+			// get the periodical holdings table
+			preg_match_all( '/<table[^>]*class="bibHoldings">(.*)<\/table>/Usi', $raw, $holdings );
+			if( !empty( $holdings[1][0] ))
+				$holdings = strip_tags( '<table>' . $holdings[1][0] . '</table>', '<table><tr><td><th><hr>');
+			else
+				unset( $holdings );
 
+			wp_cache_set( $sourceid , array('items' => $items, 'holdings' => $holdings, ) ,'scrib_availability', 86400 );
+		}else{
+			$items = $cache['items'];
+			$holdings = $cache['holdings'];
+		}
 
+// todo: fix this to deal with the new items array
+		if( $_REQUEST['textthis'] && $availability ){
+			$smsavailability = array_filter( explode( "\n", str_replace( array( 'LOCATIONCALL #STATUS', '&nbsp;', '  ' ), '', strip_tags( str_replace( '</tr>', "\n", $availability )))));
+			$more = '';
+			if( count( $smsavailability ) > 3 )
+				$more = ' (+'. ( count( $smsavailability ) - 3 ) .' more)';
+			
+			return( implode( array_slice( $smsavailability, 0, 3 ), "\n") . $more );
+		}
 
+		$return = '';
+		if( isset( $holdings )){
+			if( !is_singular() )
+				$return .= '<li class="scrib_availability_iii"><a href="'. get_permalink( $post_id ) .'">Click for periodical holdings</a>.</li>';
+			else
+				$return .= '<li class="scrib_availability_iii">Periodical Holdings: <span class="tools"><span class="innopac"><a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'" rel="nofollow" title="view inventory record"><img src="'. $scrib->path_web .'/img/icons/information.png" width="16" height="16" alt="view inventory record." /></a></span><br />'. $holdings .'</li>';
+		}
 
+		if( is_array( $items )){
+			foreach( $items as $loc_key => $location ){
+				$return .= ( '<li class="scrib_availability_iii"><span class="location">'. $location[0]['location'] .'</span>');
+				foreach( $location as $item_key => $item ){
+					$return .= ( '<br /><span class="callnumber">'. $item['callnumber'] .'</span> (<span class="status">'. $item['status'] .'</span>) <span class="tools"><!--<span class="textthis"><a href="'. get_permalink( $post_id ) .'?textthis='. $prefs['sourceprefix'] .'_'. $loc_key .'_'. $item_key .'" rel="nofollow" title="text this item&#39;s location to your cellphone"><img src="'. $scrib->path_web .'/img/icons/phone.png" width="16" height="16" alt="text this item&#39;s location to your cellphone." /></a> </span><span class="reserve"><a href="http://'. $prefs['sourceinnopac'] .'/search?/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/request~b'. $bibn .'" rel="nofollow" title="reserve this item"><img src="'. $scrib->path_web .'/img/icons/cart_add.png" width="16" height="16" alt="reserve this item." /></a> </span>--><span class="innopac"><a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'" rel="nofollow" title="view inventory record"><img src="'. $scrib->path_web .'/img/icons/information.png" width="16" height="16" alt="view inventory record." /></a></span></span>');
+				}
+				$return .= ( '</li>');
+			}
+		}
+		return( $return );
+	}
 
+	function iii_availability_filter( &$content, &$post_id, &$idnumbers ){
+		$prefs = get_option('scriblio-importer-iii');
+		$connections = array_keys( $prefs );
+		
+		$return = '';
+		
+		foreach( $idnumbers['sourceid'] as $sourceid ){
+			if( in_array( substr( $sourceid, 0, 2 ), $connections ))
+				$return = $this->iii_availability( $post_id, $sourceid );
+		}
 
-
+		return( $content . $return );
+	}
 
 	// Default constructor 
 	function ScribIII_import() {
-		// nothing
+		add_filter( 'scrib_availability_excerpt', array( &$this, 'iii_availability_filter'), 9, 3);
+		add_filter( 'scrib_availability_content', array( &$this, 'iii_availability_filter' ), 9, 3);
 	} 
 } 
 
@@ -1297,6 +1366,6 @@ if(function_exists('register_importer')) {
 function scribiii_importer_activate() { 
 	global $wp_db_version, $scribiii_import; 
 } 
-add_action('activate_'.plugin_basename(__FILE__), 'scribiii_importer_activate'); 
+add_action('activate_'.plugin_basename(__FILE__), 'scribiii_importer_activate');
 
-?>
+
