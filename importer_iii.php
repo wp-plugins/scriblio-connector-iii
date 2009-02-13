@@ -214,7 +214,7 @@ class ScribIII_import {
 		<tr valign="top">
 		<th scope="row"><?php _e('Harvest records with', 'scrib') ?></th>
 		<td>
-		<input name="scrib_iii-require_import" type="text" id="scrib_iii-require_import" value="<?php echo attribute_escape( $prefs['require_import'] ); ?>" /><br />
+		<input name="scrib_iii-require_import" type="text" id="scrib_iii-require_import" value="<?php echo format_to_edit( $prefs['require_import'] ); ?>" /><br />
 		example: My Library Location Name (optional; leave blank to harvest any record)<br />
 		uses <a href="http://php.net/strpos">strpos</a> matching rules
 		</td>
@@ -223,7 +223,7 @@ class ScribIII_import {
 		<tr valign="top">
 		<th scope="row"><?php _e('Ignore records with', 'scrib') ?></th>
 		<td>
-		<input name="scrib_iii-reject_import" type="text" id="scrib_iii-reject_import" value="<?php echo attribute_escape( $prefs['reject_import'] ); ?>" /><br />
+		<input name="scrib_iii-reject_import" type="text" id="scrib_iii-reject_import" value="<?php echo format_to_edit( $prefs['reject_import'] ); ?>" /><br />
 		example: No Such Record<br />
 		uses <a href="http://php.net/strpos">strpos</a> matching rules 
 		</td>
@@ -242,7 +242,7 @@ class ScribIII_import {
 		<tr valign="top">
 		<th scope="row"><?php _e('Show items with', 'scrib') ?></th>
 		<td>
-		<input name="scrib_iii-require_availability" type="text" id="scrib_iii-require_availability" value="<?php echo attribute_escape( $prefs['require_availability'] ); ?>" /><br />
+		<input name="scrib_iii-require_availability" type="text" id="scrib_iii-require_availability" value="<?php echo format_to_edit( $prefs['require_availability'] ); ?>" /><br />
 		example: My Library Location Name (optional; leave blank to harvest any record)<br />
 		uses <a href="http://php.net/strpos">strpos</a> matching rules
 		</td>
@@ -251,7 +251,7 @@ class ScribIII_import {
 		<tr valign="top">
 		<th scope="row"><?php _e('Ignore items with', 'scrib') ?></th>
 		<td>
-		<input name="scrib_iii-reject_availability" type="text" id="scrib_iii-reject_availability" value="<?php echo attribute_escape( $prefs['reject_availability'] ); ?>" /><br />
+		<input name="scrib_iii-reject_availability" type="text" id="scrib_iii-reject_availability" value="<?php echo format_to_edit( $prefs['reject_availability'] ); ?>" /><br />
 		example: No Such Record<br />
 		uses <a href="http://php.net/strpos">strpos</a> matching rules 
 		</td>
@@ -387,15 +387,13 @@ class ScribIII_import {
 			error_reporting(E_ERROR);
 	
 			if( !empty( $_REQUEST['scrib_iii-debug'] )){
-	
-				$host =  $prefs['sourceinnopac'];
 				$bibn = (int) $_REQUEST['scrib_iii-record_start'];
 	
 				echo '<h3>The III Record:</h3><pre>';			
-				echo $this->iii_get_record($host, $bibn);
+				echo $this->iii_get_record( $prefs['sourceprefix'], $bibn );
 				echo '</pre><h3>The Tags and Display Record:</h3><pre>';
 	
-				$test_pancake = $this->iii_parse_record( $this->iii_get_record( $host, $bibn ), $bibn );
+				$test_pancake = $this->iii_parse_record( $prefs['sourceprefix'], $this->iii_get_record( $prefs['sourceprefix'], $bibn ), $bibn );
 				print_r( $test_pancake );
 				echo '</pre>';
 
@@ -407,14 +405,13 @@ class ScribIII_import {
 			
 			}else{
 				// import with status
-				$host =  $prefs['sourceinnopac'];
 	
 				$count = 0;
 				echo "<p>Reading a batch of $interval records from {$prefs['sourceinnopac']}. Please be patient.<br /><br /></p>";
 				echo '<ol>';
 				for( $bibn = (int) $_REQUEST['scrib_iii-record_start'] ; $bibn < ( $_REQUEST['scrib_iii-record_start'] + $interval ) ; $bibn++ ){
-					if($record = $this->iii_get_record( $host , $bibn )){
-						$bibr = $this->iii_parse_record( $record , $bibn );
+					if($record = $this->iii_get_record( $prefs['sourceprefix'] , $bibn )){
+						$bibr = $this->iii_parse_record( $prefs['sourceprefix'], $record , $bibn );
 						echo "<li>{$bibr['the_title']} {$bibr['_sourceid']}</li>";
 						$count++;
 					}
@@ -465,13 +462,15 @@ class ScribIII_import {
 		}
 	}
 
-	function iii_get_record($host, $bibn){
-		$prefs = get_option('scrib_iiiimporter');
-
+	function iii_get_record( $prefix, $bibn ){
+		$prefs = get_option('scriblio-importer-iii');
+		$prefs = $prefs[ $prefix ];
+		if( !is_array( $prefs ))
+			return( FALSE );
 
 		// get the regular web-view of the record and 
 		// see if it matches the require/reject preferences
-		$test_record = file_get_contents('http://'. $host .'/record=b'. $bibn);
+		$test_record = file_get_contents('http://'. $prefs['sourceinnopac'] .'/record=b'. $bibn);
 
 		if( $prefs['require_import'] && !strpos( $test_record, $prefs['require_import'] ))
 			return(FALSE);
@@ -479,9 +478,8 @@ class ScribIII_import {
 		if( $prefs['reject_import'] && strpos( $test_record, $prefs['reject_import'] ))
 			return(FALSE);
 
-
 		// now get the MARC view of the record
-		$recordurl = 'http://'. $host .'/search/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/marc~b'. $bibn;
+		$recordurl = 'http://'. $prefs['sourceinnopac'] .'/search/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/marc~b'. $bibn;
 
 //note to HKUST: Added an option to enabled utf8 encoding
 		if( $prefs['convert_encoding'] && function_exists( 'mb_convert_encoding' ))
@@ -565,14 +563,13 @@ class ScribIII_import {
 		return($marcrow);
 	}
 
-	function iii_parse_record( &$marcrecord, &$bibn ){
+	function iii_parse_record( $sourceprefix, &$marcrecord, &$bibn ){
 		global $scrib;
 
 		$prefs = get_option('scriblio-importer-iii');
-		if( !isset( $_GET['sourceprefix'] ) || !is_array( $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ] ))
-			die( FALSE );
-
-		$prefs = $prefs[ preg_replace( '/[^a-z0-9]/', '', strtolower( $_GET['sourceprefix'] )) ];
+		$prefs = $prefs[ $sourceprefix ];
+		if( !is_array( $prefs ))
+			return( FALSE );
 
 		$spare_keys = array( 'a', 'b', 'c', 'd', 'e', 'f', 'g' );
 		$atomic = $subjtemp = array();
@@ -1241,13 +1238,11 @@ disabled for now, no records to test against
 
 		$prefs = get_option('scriblio-importer-iii');
 		$prefs = $prefs[ substr( $sourceid, 0, 2 ) ];
-
-//		$scrib_import->update_record( $id );
-
 		$bibn = substr( $sourceid, 2 );
 
+		$this->iii_harvest_passive_single_schedule( $prefs['sourceprefix'], $bibn ); // updated the harvested record
+
 		$cache = wp_cache_get( $sourceid , 'scrib_availability' );
-		
 		if( !is_array( $cache )){
 			
 			$raw = file_get_contents( 'http://'. $prefs['sourceinnopac'] .'/record='. $bibn );
@@ -1349,23 +1344,100 @@ disabled for now, no records to test against
 		return( $content . $return );
 	}
 
+	function iii_harvest_passive(){
+		global $wpdb, $scrib, $bsuite;
+
+		if( !$bsuite->get_lock( 'scriblio-importer-iii-passvimport' ))
+			return( TRUE );
+
+		$prefs = get_option('scriblio-importer-iii');
+		$prefs = $prefs[ array_rand( $prefs ) ];
+
+		$record_start = $wpdb->get_var( 'SELECT SUBSTRING( source_id, 3 ) FROM '. $scrib->harvest_table .' WHERE source_id LIKE "'. $wpdb->escape( $prefs['sourceprefix'] ) .'%" ORDER BY source_id DESC LIMIT 1' );
+
+		if( !absint( $record_start ))
+			$record_start = $prefs['bibrange_low'];
+
+		$record_end = $record_start + 50;
+
+		if( $prefs['bibrange_high'] > $record_end )
+			$this->iii_harvest_range( $prefs['sourceprefix'], $record_start, $record_end );
+	}
+
+	function iii_harvest_passive_single_schedule( $prefix, $bibn ) { 
+		global $wpdb, $scrib; 
+
+		$prefs = get_option('scriblio-importer-iii');
+		$prefs = $prefs[ $prefix ];
+		if( !is_array( $prefs ))
+			return( FALSE );
+
+		if ( wp_cache_get( $prefs['sourceprefix'] . $bibn, 'scrib_harvested' ) > time())
+			return( FALSE );
+
+		if( ( absint( $wpdb->get_var( 'SELECT UNIX_TIMESTAMP( harvest_date ) FROM '. $scrib->harvest_table .' WHERE source_id = "'. $wpdb->escape( $prefs['sourceprefix'] . $bibn ) .'" LIMIT 1' )) + 2500000 ) > time() )
+			return( FALSE );
+
+//		wp_clear_scheduled_hook( 'scrib-importer-iii-harvest-single', 'ak', 999987 , 1000017 );
+
+		wp_schedule_single_event( time() + rand( 60, 585 ) , 'scrib-importer-iii-harvest-single' , array( $prefs['sourceprefix'] . $bibn ));
+
+		wp_cache_set( $bibr['_sourceid'], time() + 86400, 'scrib_harvested', time() + 86400 );
+	} 
+
+	function iii_harvest_passive_single( $sourceid ) {
+		global $bsuite; 
+
+		//error_log( "Updating a single record: ". $sourceid );
+
+		if( !$bsuite->get_lock( 'scriblio-importer-iii-updsingle' )){
+			wp_schedule_single_event( time() + rand( 60, 585 ) , 'scrib-importer-iii-harvest-single' , array( $sourceid ) );
+			return( FALSE );
+		}
+
+		$prefs = get_option('scriblio-importer-iii');
+		$prefs = $prefs[ substr( $sourceid, 0, 2 ) ];
+		if( !is_array( $prefs ))
+			return( FALSE );
+
+		$bibn = substr( $sourceid, 2 );
+
+		$min = absint( $bibn - 7 );
+		$max = $bibn + 7;
+
+		$this->iii_harvest_range( $prefs['sourceprefix'], $min, $max );
+	} 
+
+	function iii_harvest_range( $prefix, $bibn, $bibn_end ) {
+		$bibn = absint( $bibn );
+		$bibn_end = absint( $bibn_end );
+
+		for( $bibn ; $bibn <= $bibn_end ; $bibn++ )
+			$this->iii_parse_record( $prefix, $this->iii_get_record( $prefix , $bibn ) , $bibn );
+	} 
+
+	function init(){
+		global $bsuite;
+
+		add_filter( 'scrib_availability_excerpt', array( &$this, 'iii_availability_filter' ), 9, 3);
+		add_filter( 'scrib_availability_content', array( &$this, 'iii_availability_filter' ), 9, 3);
+
+		add_action('scrib-importer-iii-harvest-single', array( &$this, 'iii_harvest_passive_single' ));
+		add_action('scrib-importer-iii-harvest-single', 'iii_harvest_passive_single' );
+
+		if( $bsuite->loadavg < get_option( 'bsuite_load_max' )) // only do cron if load is low-ish
+			add_filter('bsuite_interval', array( &$this, 'iii_harvest_passive' ));
+	}
+
 	// Default constructor 
 	function ScribIII_import() {
-		add_filter( 'scrib_availability_excerpt', array( &$this, 'iii_availability_filter'), 9, 3);
-		add_filter( 'scrib_availability_content', array( &$this, 'iii_availability_filter' ), 9, 3);
+		add_action( 'init', array( &$this, 'init' ));
 	} 
 } 
 
 // Instantiate and register the importer 
-include_once(ABSPATH . 'wp-admin/includes/import.php'); 
-if(function_exists('register_importer')) { 
-	$scribiii_import = new ScribIII_import(); 
-	register_importer($scribiii_import->importer_code, $scribiii_import->importer_name, $scribiii_import->importer_desc, array (&$scribiii_import, 'dispatch')); 
-} 
-
-function scribiii_importer_activate() { 
-	global $wp_db_version, $scribiii_import; 
-} 
-add_action('activate_'.plugin_basename(__FILE__), 'scribiii_importer_activate');
-
-
+$scribiii_import = new ScribIII_import();
+include_once( ABSPATH . 'wp-admin/includes/import.php' ); 
+if( function_exists( 'register_importer' )){ 
+	register_importer( $scribiii_import->importer_code, $scribiii_import->importer_name, $scribiii_import->importer_desc, array( &$scribiii_import, 'dispatch' )); 
+}
