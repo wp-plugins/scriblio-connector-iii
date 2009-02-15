@@ -797,7 +797,7 @@ class ScribIII_import {
 					}
 				}
 			}else if($lineray[0] == 5){
-				$atomic['_acqdate'][] = $line{7}.$line{8}.$line{9}.$line{10} .'-'. $line{11}.$line{12} .'-'. $line{13}.$line{14};
+				$_acqdate[] = $line{7}.$line{8}.$line{9}.$line{10} .'-'. $line{11}.$line{12} .'-'. $line{13}.$line{14};
 			}else if($lineray[0] == 8){
 				$temp = intval(substr($line, 14, 4));
 				if($temp)
@@ -1159,7 +1159,7 @@ disabled for now, no records to test against
 		// Records without _acqdates are reserves by course/professor
 		// we _can_ import them, but they don't have enough info
 		// to be findable or display well.
-		if(!$atomic['_acqdate'][0] && !$atomic['creator'][0]){
+		if(!$_acqdate[0] && !$atomic['creator'][0]){
 			$this->warn = 'Record number '. $bibn .' contains no catalog date or author info, skipped.';
 			return( FALSE );
 		}
@@ -1201,27 +1201,33 @@ disabled for now, no records to test against
 				$atomic['title'][ $key ]['a'] = ucwords( $val['a'] );
 
 		// insert the sourceid
-		$atomic['_sourceid'] = $prefs['sourceprefix'] . $bibn;
-		$atomic['idnumbers'][] = array( 'type' => 'sourceid', 'id' => $atomic['_sourceid'] );
+		$_sourceid = $prefs['sourceprefix'] . $bibn;
+		$atomic['idnumbers'][] = array( 'type' => 'sourceid', 'id' => $_sourceid );
 
 		// sanity check the _acqdate
-		$atomic['_acqdate'] = array_unique($atomic['_acqdate']);
-		foreach( $atomic['_acqdate'] as $key => $temp )
+		$_acqdate = array_unique($_acqdate);
+		foreach( $_acqdate as $key => $temp )
 			if( strtotime( $temp ) > strtotime( date('Y') + 2 ))
-				unset( $atomic['_acqdate'][$key] );
-		$atomic['_acqdate'] = array_values( $atomic['_acqdate'] );
-		if( !isset( $atomic['_acqdate'][0] ))
+				unset( $_acqdate[$key] );
+		$_acqdate = array_values( $_acqdate );
+		if( !isset( $_acqdate[0] ))
 			if( isset( $atomic['pubyear'][0] ))
-				$atomic['_acqdate'][0] = $atomic['pubyear'][0] .'-01-01';
+				$_acqdate[0] = $atomic['pubyear'][0] .'-01-01';
 			else
-				$atomic['_acqdate'][0] = ( date('Y') - 1 ) .'-01-01';
-		$atomic['_acqdate'] = $atomic['_acqdate'][0];
+				$_acqdate[0] = ( date('Y') - 1 ) .'-01-01';
+		$_acqdate = $_acqdate[0];
 
-		if( !empty( $atomic['title'] ) && !empty( $atomic['_sourceid'] )){
+		if( !empty( $atomic['title'] ) && !empty( $_sourceid )){
 			foreach( $atomic as $ak => $av )
 				foreach( $av as $bk => $bv )
 					if( is_array( $bv ))
-						$atomic[ $ak ][ $bk ] = array_merge( $bv, array( 'src' => 'sourceid:'. $atomic['_sourceid'] ));
+						$atomic[ $ak ][ $bk ] = array_merge( $bv, array( 'src' => 'sourceid:'. $_sourceid ));
+
+			$atomic = array( 'marish' => $atomic );
+			$atomic['_acqdate'] = $_acqdate;
+			$atomic['_sourceid'] = $_sourceid;
+			$atomic['_title'] = $atomic['marcish']['title'][0]['a'];
+			$atomic['_idnumbers'] = $atomic['marcish']['idnumbers'];
 
 			$scrib->import_insert_harvest( $atomic );
 			return( $atomic );
@@ -1347,7 +1353,7 @@ disabled for now, no records to test against
 	function iii_harvest_passive(){
 		global $wpdb, $scrib, $bsuite;
 
-		if( !$bsuite->get_lock( 'scriblio-importer-iii-passvimport' ))
+		if ( get_option( 'scriblio-importer-iii-passvimport') > time() || !$bsuite->get_lock( 'scriblio-importer-iii-passvimport' ) )
 			return( TRUE );
 
 		$prefs = get_option('scriblio-importer-iii');
@@ -1362,6 +1368,8 @@ disabled for now, no records to test against
 
 		if( $prefs['bibrange_high'] > $record_end )
 			$this->iii_harvest_range( $prefs['sourceprefix'], $record_start, $record_end );
+
+		update_option( 'scriblio-importer-iii-passvimport', time() + 14400 );
 	}
 
 	function iii_harvest_passive_single_schedule( $prefix, $bibn ) { 
