@@ -470,7 +470,7 @@ class ScribIII_import {
 
 		// get the regular web-view of the record and 
 		// see if it matches the require/reject preferences
-		$test_record = file_get_contents('http://'. $prefs['sourceinnopac'] .'/record=b'. $bibn);
+		$test_record = wp_remote_get('http://'. $prefs['sourceinnopac'] .'/record=b'. $bibn);
 
 		if( $prefs['require_import'] && !strpos( $test_record, $prefs['require_import'] ))
 			return(FALSE);
@@ -483,9 +483,9 @@ class ScribIII_import {
 
 //note to HKUST: Added an option to enabled utf8 encoding
 		if( $prefs['convert_encoding'] && function_exists( 'mb_convert_encoding' ))
-			$record = mb_convert_encoding( file_get_contents( $recordurl ), 'UTF-8', 'LATIN1, ASCII, ISO-8859-1, UTF-8');
+			$record = mb_convert_encoding( wp_remote_get( $recordurl ), 'UTF-8', 'LATIN1, ASCII, ISO-8859-1, UTF-8');
 		else
-			$record = file_get_contents($recordurl);
+			$record = wp_remote_get($recordurl);
 
 		if(!empty($record)){
 			preg_match('/<pre>([^<]*)/', $record, $stuff);
@@ -1251,7 +1251,9 @@ disabled for now, no records to test against
 		$cache = wp_cache_get( $sourceid , 'scrib_availability' );
 		if( !is_array( $cache )){
 			
-			$raw = file_get_contents( 'http://'. $prefs['sourceinnopac'] .'/record='. $bibn );
+			$raw = wp_remote_get( 'http://'. $prefs['sourceinnopac'] .'/record='. $bibn );
+			if( is_object( $raw ))
+				return( '<li class="scrib_availability_iii">There was an error while connecting to the inventory system. <a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'">Click here to try for yourself</a>.</li>' );
 
 			// detect deleted record
 			if( strpos( $raw, $prefs['reject_import'] )){
@@ -1263,10 +1265,10 @@ disabled for now, no records to test against
 				// clear the post/page cache
 				clean_page_cache( $post_id );
 				clean_post_cache( $post_id );
-	
+
 				// do the post transition
 				wp_transition_post_status( 'draft', 'publish', $post_id );
-	
+
 				// tell the user the book isn't available
 				return( 'This item is no longer available at this library.' );
 			}
