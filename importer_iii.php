@@ -1256,7 +1256,7 @@ disabled for now, no records to test against
 				return( '<li class="scrib_availability_iii">There was an error while connecting to the inventory system. <a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'">Click here to try for yourself</a>.</li>' );
 
 			// detect deleted record
-			if( strpos( $raw, $prefs['reject_import'] )){
+			if( strpos( $raw['body'], $prefs['reject_import'] )){
 				global $wpdb;
 	
 				// set the post to draft (might oughta use a WP function instead of writing to DB)
@@ -1274,11 +1274,11 @@ disabled for now, no records to test against
 			}
 
 			// clean up all the damn comments and spaces
-			$raw = preg_replace( '/<!--[^-]*-->/Usi', '', $raw);
-			$raw = preg_replace( '/&nbsp;/Usi', '', $raw);
+			$raw['body'] = preg_replace( '/<!--[^-]*-->/Usi', '', $raw['body']);
+			$raw['body'] = preg_replace( '/&nbsp;/Usi', '', $raw['body']);
 
 			// get the attached items and their availability
-			preg_match_all( '/<tr[^>]*class="bibItemsEntry">(.*)<\/tr>/Usi', $raw, $itemrows );
+			preg_match_all( '/<tr[^>]*class="bibItemsEntry">(.*)<\/tr>/Usi', $raw['body'], $itemrows );
 			foreach( $itemrows[1] as $item ){
 				preg_match_all( '/<td[^>]*>(.*)<\/td>/Usi', $item, $matches );
 
@@ -1296,7 +1296,7 @@ disabled for now, no records to test against
 			$items = array_values( $items );
 
 			// get the periodical holdings table
-			preg_match_all( '/<table[^>]*class="bibHoldings">(.*)<\/table>/Usi', $raw, $holdings );
+			preg_match_all( '/<table[^>]*class="bibHoldings">(.*)<\/table>/Usi', $raw['body'], $holdings );
 			if( !empty( $holdings[1][0] ))
 				$holdings = strip_tags( '<table>' . $holdings[1][0] . '</table>', '<table><tr><td><th><hr>');
 			else
