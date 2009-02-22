@@ -480,15 +480,15 @@ class ScribIII_import {
 
 		// now get the MARC view of the record
 		$recordurl = 'http://'. $prefs['sourceinnopac'] .'/search/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/marc~b'. $bibn;
+		$record = wp_remote_get( $recordurl );
 
 //note to HKUST: Added an option to enabled utf8 encoding
 		if( $prefs['convert_encoding'] && function_exists( 'mb_convert_encoding' ))
-			$record = mb_convert_encoding( wp_remote_get( $recordurl ), 'UTF-8', 'LATIN1, ASCII, ISO-8859-1, UTF-8');
+			$record = mb_convert_encoding( $record['body'], 'UTF-8', 'LATIN1, ASCII, ISO-8859-1, UTF-8');
 		else
-			$record = wp_remote_get($recordurl);
+			$record = $record['body'];
 
 		if( !empty( $record['body'] )){
-			$record['body'] = $record;
 
 			preg_match('/<pre>([^<]*)/', $record, $stuff);
 //Start HKUST Customization
