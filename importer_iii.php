@@ -471,6 +471,8 @@ class ScribIII_import {
 		// get the regular web-view of the record and 
 		// see if it matches the require/reject preferences
 		$test_record = wp_remote_get('http://'. $prefs['sourceinnopac'] .'/record=b'. $bibn);
+		if( is_wp_error( $test_record ))
+			$test_record = array( 'body' => '');
 
 		if( $prefs['require_import'] && !strpos( $test_record['body'], $prefs['require_import'] ))
 			return(FALSE);
@@ -478,15 +480,14 @@ class ScribIII_import {
 		if( $prefs['reject_import'] && strpos( $test_record['body'], $prefs['reject_import'] ))
 			return(FALSE);
 
+		unset( $test_record );
+
 		// now get the MARC view of the record
 		$recordurl = 'http://'. $prefs['sourceinnopac'] .'/search/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/marc~b'. $bibn;
 		$record = wp_remote_get( $recordurl );
 		if( is_wp_error( $record ))
 			$record = array( 'body' => '');
 
-print_r( $record );
-
-//note to HKUST: Added an option to enabled utf8 encoding
 		if( $prefs['convert_encoding'] && function_exists( 'mb_convert_encoding' ))
 			$record = mb_convert_encoding( $record['body'], 'UTF-8', 'LATIN1, ASCII, ISO-8859-1, UTF-8');
 		else
@@ -495,7 +496,7 @@ print_r( $record );
 		if( !empty( $record['body'] )){
 
 			preg_match('/<pre>([^<]*)/', $record, $stuff);
-//Start HKUST Customization
+
 			//Create Tag 999
 			$strline = '';
 
@@ -1258,7 +1259,7 @@ disabled for now, no records to test against
 		if( !is_array( $cache )){
 			
 			$raw = wp_remote_get( 'http://'. $prefs['sourceinnopac'] .'/record='. $bibn );
-			if( is_object( $raw ))
+			if( is_wp_error( $raw ))
 				return( '<li class="scrib_availability_iii">There was an error while connecting to the inventory system. <a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'">Click here to try for yourself</a>.</li>' );
 
 			// detect deleted record
