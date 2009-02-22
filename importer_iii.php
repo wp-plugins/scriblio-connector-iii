@@ -472,10 +472,10 @@ class ScribIII_import {
 		// see if it matches the require/reject preferences
 		$test_record = wp_remote_get('http://'. $prefs['sourceinnopac'] .'/record=b'. $bibn);
 
-		if( $prefs['require_import'] && !strpos( $test_record, $prefs['require_import'] ))
+		if( $prefs['require_import'] && !strpos( $test_record['body'], $prefs['require_import'] ))
 			return(FALSE);
 
-		if( $prefs['reject_import'] && strpos( $test_record, $prefs['reject_import'] ))
+		if( $prefs['reject_import'] && strpos( $test_record['body'], $prefs['reject_import'] ))
 			return(FALSE);
 
 		// now get the MARC view of the record
@@ -487,7 +487,9 @@ class ScribIII_import {
 		else
 			$record = wp_remote_get($recordurl);
 
-		if(!empty($record)){
+		if( !empty( $record['body'] )){
+			$record['body'] = $record;
+
 			preg_match('/<pre>([^<]*)/', $record, $stuff);
 //Start HKUST Customization
 			//Create Tag 999
