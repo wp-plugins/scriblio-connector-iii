@@ -1230,7 +1230,7 @@ disabled for now, no records to test against
 					if( is_array( $bv ))
 						$atomic[ $ak ][ $bk ] = array_merge( $bv, array( 'src' => 'sourceid:'. $_sourceid ));
 
-			$atomic = array( 'marish' => $atomic );
+			$atomic = array( 'marcish' => $atomic );
 			$atomic['_acqdate'] = $_acqdate;
 			$atomic['_sourceid'] = $_sourceid;
 			$atomic['_title'] = $atomic['marcish']['title'][0]['a'];
