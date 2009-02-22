@@ -481,6 +481,10 @@ class ScribIII_import {
 		// now get the MARC view of the record
 		$recordurl = 'http://'. $prefs['sourceinnopac'] .'/search/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/marc~b'. $bibn;
 		$record = wp_remote_get( $recordurl );
+		if( is_wp_error( $record ))
+			$record = array( 'body' => '');
+
+print_r( $record );
 
 //note to HKUST: Added an option to enabled utf8 encoding
 		if( $prefs['convert_encoding'] && function_exists( 'mb_convert_encoding' ))
