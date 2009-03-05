@@ -3,7 +3,7 @@
 Plugin Name: Scriblio III Catalog Importer
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
-Version: 2.7 b02
+Version: 2.7 b03
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
@@ -1353,7 +1353,7 @@ disabled for now, no records to test against
 		
 		foreach( $idnumbers['sourceid'] as $sourceid ){
 			if( in_array( substr( $sourceid, 0, 2 ), $connections ))
-				$return = $this->iii_availability( $post_id, $sourceid );
+				$return .= $this->iii_availability( $post_id, $sourceid );
 		}
 
 		return( $content . $return );
