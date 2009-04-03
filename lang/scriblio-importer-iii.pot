@@ -1,0 +1,149 @@
+# SOME DESCRIPTIVE TITLE.
+# This file is put in the public domain.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: http://wordpress.org/tag/scriblio-importer-iii\n"
+"POT-Creation-Date: 2009-01-28 22:25+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: importer_iii.php:77
+msgid "Scriblio III Importer"
+msgstr ""
+
+#: importer_iii.php:87
+msgid "All done"
+msgstr ""
+
+#: importer_iii.php:122
+msgid ""
+"Use this importer to harvest records from an Innovative Interfaces "
+"Incorporated ILS. Select a connection below or add a new one."
+msgstr ""
+
+#: importer_iii.php:149
+msgid "No connections configured."
+msgstr ""
+
+#: importer_iii.php:149
+msgid "Create a new one?"
+msgstr ""
+
+#: importer_iii.php:152
+msgid "Create a new connection"
+msgstr ""
+
+#: importer_iii.php:170
+msgid "Innopac"
+msgstr ""
+
+#: importer_iii.php:174
+msgid "The Innopac base hostname"
+msgstr ""
+
+#: importer_iii.php:181
+msgid "The source prefix"
+msgstr ""
+
+#: importer_iii.php:194
+msgid ""
+"Many III web OPACs use encodings other than <a href=\"http://en.wikipedia."
+"org/wiki/UTF-8\">UTF8</a>. This option will attempt to convert the "
+"characters to UTF8 so that accented and non-latin characters are properly "
+"represented. However, do not use this option if your web OPAC is configured "
+"to output UTF8 characters."
+msgstr ""
+
+#: importer_iii.php:203
+msgid "Importing"
+msgstr ""
+
+#: importer_iii.php:207
+msgid "Bib record number range"
+msgstr ""
+
+#: importer_iii.php:215
+msgid "Harvest records with"
+msgstr ""
+
+#: importer_iii.php:224
+msgid "Ignore records with"
+msgstr ""
+
+#: importer_iii.php:239
+msgid "Availability"
+msgstr ""
+
+#: importer_iii.php:243
+msgid "Show items with"
+msgstr ""
+
+#: importer_iii.php:252
+msgid "Ignore items with"
+msgstr ""
+
+#: importer_iii.php:262
+msgid "Save"
+msgstr ""
+
+#: importer_iii.php:275
+msgid "Really delete this connection?"
+msgstr ""
+
+#: importer_iii.php:284
+msgid "Delete"
+msgstr ""
+
+#: importer_iii.php:289 importer_iii.php:359
+msgid "Um, what?"
+msgstr ""
+
+#: importer_iii.php:289 importer_iii.php:359
+msgid "Try again"
+msgstr ""
+
+#: importer_iii.php:324
+msgid "Importing records from:"
+msgstr ""
+
+#: importer_iii.php:329
+msgid "Start with bib number"
+msgstr ""
+
+#: importer_iii.php:336
+msgid "End"
+msgstr ""
+
+#: importer_iii.php:353
+msgid "Next &raquo;"
+msgstr ""
+
+#: importer_iii.php:405
+msgid "III Options"
+msgstr ""
+
+#: importer_iii.php:434
+msgid ""
+"If your browser doesn't start loading the next page automatically click this "
+"link:"
+msgstr ""
+
+#: importer_iii.php:434
+msgid "Next Records"
+msgstr ""
+
+#: importer_iii.php:545
+msgid "Processing complete."
+msgstr ""
+
+#: importer_iii.php:546
+msgid "records harvested."
+msgstr ""
