@@ -1,4 +1,5 @@
 <?php
+
 /*
 Plugin Name: Scriblio III Catalog Importer
 Plugin URI: http://about.scriblio.net/
@@ -1309,11 +1310,34 @@ disabled for now, no records to test against
 			else
 				unset( $holdings );
 
-			wp_cache_set( $sourceid , array('items' => $items, 'holdings' => $holdings, ) ,'scrib_availability', 86400 );
+			// Mike D, added 4-9-9
+			// Parse record for evidence of a new purchase (order record)
+			preg_match_all('/<tr[^>]*class="bibOrderEntry">(.*)<\/tr>/Usi', $raw, $orderrows);
+			
+			// Process each order entry, relevant for items showing "x copy/ies ordered" or "being processed"
+			foreach ($orderrows[1] as $order)  // maybe this will never have more than 1 element? 
+			{
+				preg_match_all('/<td[^>]*>(.*)<\/td>/Usi', $order, $order_rec); // $order_rec now has cell data
+					
+				// if order record was shown, put that status in our orders array
+				if (!empty($order_rec[1][0]))
+				$orders[ $order_rec[1][0] ][] = trim(strip_tags($order_rec[1][0]));
+			}
+			
+			$orders = array_values($orders); // Change array from associative to numerically indexed
+			// End of Mike D
+
+			// Mike D, changed 4-9-9 to include ", 'orders' => $orders"
+			wp_cache_set( $sourceid , array('items' => $items, 'holdings' => $holdings, 'orders' => $orders, ) ,'scrib_availability', 86400 );
 		}else{
 			$items = $cache['items'];
 			$holdings = $cache['holdings'];
+			// Mike D, added 4-9-9: include order records in cache retrieval
+			// If bib record was found in WP cache, retrieve order status
+			$orders = $cache['orders'];
+			// End of Mike D
 		}
+
 
 // todo: fix this to deal with the new items array
 		if( $_REQUEST['textthis'] && $availability ){
@@ -1342,6 +1366,18 @@ disabled for now, no records to test against
 				$return .= ( '</li>');
 			}
 		}
+
+		// Mike D, added 4-9-9: include order text in Scriblio record
+		// Present order information, if there is any
+		if ( is_array($orders) )  // $orders will be an array of string if the order entry markup was found
+		{	
+			foreach ($orders as $order_status)
+			{
+				$return .= '<li class="scrib_availability_iii"><span class="order">'.__($order_status[0]).'</span></li>'."\n";
+			}
+		}
+		// End of Mike D
+
 		return( $return );
 	}
 
