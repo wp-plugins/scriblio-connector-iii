@@ -1,14 +1,14 @@
 <?php
 
 /*
-Plugin Name: Scriblio III Catalog Importer
+Plugin Name: Scriblio III Connector
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
 Version: 2.7 b03
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
-/* Copyright 2006 - 2008 Casey Bisson & Plymouth State University
+/* Copyright 2006 - 2009 Casey Bisson & Plymouth State University
 
 	This program is free software; you can redistribute it and/or modify 
 	it under the terms of the GNU General Public License as published by 
