@@ -1312,19 +1312,18 @@ disabled for now, no records to test against
 
 			// Mike D, added 4-9-9
 			// Parse record for evidence of a new purchase (order record)
-			preg_match_all('/<tr[^>]*class="bibOrderEntry">(.*)<\/tr>/Usi', $raw, $orderrows);
-			
+			preg_match_all('/<tr[^>]*class="bibOrderEntry">(.*)<\/tr>/Usi', $raw['body'], $orderrows);
+
+			$orders = array();
 			// Process each order entry, relevant for items showing "x copy/ies ordered" or "being processed"
-			foreach ($orderrows[1] as $order)  // maybe this will never have more than 1 element? 
+			foreach ( $orderrows[1] as $orderrow)  // maybe this will never have more than 1 element? 
 			{
-				preg_match_all('/<td[^>]*>(.*)<\/td>/Usi', $order, $order_rec); // $order_rec now has cell data
+				preg_match_all('/<td[^>]*>(.*)<\/td>/Usi', $orderrow, $order_rec); // $order_rec now has cell data
 					
 				// if order record was shown, put that status in our orders array
-				if (!empty($order_rec[1][0]))
-				$orders[ $order_rec[1][0] ][] = trim(strip_tags($order_rec[1][0]));
+				if ( !empty( $order_rec[1][0] ))
+					$orders[] = trim( force_balance_tags( wp_filter_nohtml_kses( $order_rec[1][0] )));
 			}
-			
-			$orders = array_values($orders); // Change array from associative to numerically indexed
 			// End of Mike D
 
 			// Mike D, changed 4-9-9 to include ", 'orders' => $orders"
@@ -1361,7 +1360,10 @@ disabled for now, no records to test against
 			foreach( $items as $loc_key => $location ){
 				$return .= ( '<li class="scrib_availability_iii"><span class="location">'. $location[0]['location'] .'</span>');
 				foreach( $location as $item_key => $item ){
+/*
 					$return .= ( '<br /><span class="callnumber">'. $item['callnumber'] .'</span> (<span class="status">'. $item['status'] .'</span>) <span class="tools"><!--<span class="textthis"><a href="'. get_permalink( $post_id ) .'?textthis='. $prefs['sourceprefix'] .'_'. $loc_key .'_'. $item_key .'" rel="nofollow" title="text this item&#39;s location to your cellphone"><img src="'. $scrib->path_web .'/img/icons/phone.png" width="16" height="16" alt="text this item&#39;s location to your cellphone." /></a> </span><span class="reserve"><a href="http://'. $prefs['sourceinnopac'] .'/search?/.b'. $bibn .'/.b'. $bibn .'/1%2C1%2C1%2CB/request~b'. $bibn .'" rel="nofollow" title="reserve this item"><img src="'. $scrib->path_web .'/img/icons/cart_add.png" width="16" height="16" alt="reserve this item." /></a> </span>--><span class="innopac"><a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'" rel="nofollow" title="view inventory record"><img src="'. $scrib->path_web .'/img/icons/information.png" width="16" height="16" alt="view inventory record." /></a></span></span>');
+*/
+					$return .= ( '<br /><span class="callnumber">'. $item['callnumber'] .'</span> (<span class="status">'. $item['status'] .'</span>) <span class="tools"><span class="innopac"><a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'" rel="nofollow" title="view inventory record"><img src="'. $scrib->path_web .'/img/icons/information.png" width="16" height="16" alt="view inventory record." /></a></span></span>');
 				}
 				$return .= ( '</li>');
 			}
@@ -1371,9 +1373,9 @@ disabled for now, no records to test against
 		// Present order information, if there is any
 		if ( is_array($orders) )  // $orders will be an array of string if the order entry markup was found
 		{	
-			foreach ($orders as $order_status)
+			foreach( $orders as $order_status )
 			{
-				$return .= '<li class="scrib_availability_iii"><span class="order">'.__($order_status[0]).'</span></li>'."\n";
+				$return .= '<li class="scrib_availability_iii"><span class="order">'. $order_status .' <span class="innopac"><a href="http://'. $prefs['sourceinnopac'] .'/record='. $bibn .'" rel="nofollow" title="view inventory record"><img src="'. $scrib->path_web .'/img/icons/information.png" width="16" height="16" alt="view inventory record." /></a></span></span></li>'."\n";
 			}
 		}
 		// End of Mike D
