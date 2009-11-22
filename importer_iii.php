@@ -4,7 +4,7 @@
 Plugin Name: Scriblio III Connector
 Plugin URI: http://about.scriblio.net/
 Description: Imports catalog content directly from a III web OPAC, no MaRC export/import needed.
-Version: 2.7 b03
+Version: 2.7 b04
 Author: Casey Bisson
 Author URI: http://maisonbisson.com/blog/
 */
@@ -112,6 +112,8 @@ class ScribIII_import {
 			$prefs['capitalize_titles'] = isset( $_POST['scrib_iii-capitalize_titles'] );
 			$prefs['require_availability'] = $_POST['scrib_iii-require_availability'];
 			$prefs['reject_availability'] = $_POST['scrib_iii-reject_availability'];
+			$prefs['require_order'] = $_POST['scrib_iii-require_order'];
+			$prefs['reject_order'] = $_POST['scrib_iii-reject_order'];
 
 			$save_prefs[ $prefs['sourceprefix'] ] = $prefs;
 
@@ -254,6 +256,27 @@ class ScribIII_import {
 		<td>
 		<input name="scrib_iii-reject_availability" type="text" id="scrib_iii-reject_availability" value="<?php echo format_to_edit( $prefs['reject_availability'] ); ?>" /><br />
 		example: No Such Record<br />
+		uses <a href="http://php.net/strpos">strpos</a> matching rules 
+		</td>
+		</tr>
+		</table>
+
+		<h3><?php _e('Order Records') ?></h3>
+
+		<table class="form-table">
+		<tr valign="top">
+		<th scope="row"><?php _e('Show order records with', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-require_order" type="text" id="scrib_iii-require_order" value="<?php echo format_to_edit( $prefs['require_order'] ); ?>" /><br />
+		example: My Library Location Name (optional; leave blank to show any order)<br />
+		uses <a href="http://php.net/strpos">strpos</a> matching rules
+		</td>
+		</tr>
+		
+		<tr valign="top">
+		<th scope="row"><?php _e('Ignore orders with', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-reject_order" type="text" id="scrib_iii-reject_order" value="<?php echo format_to_edit( $prefs['reject_order'] ); ?>" /><br />
 		uses <a href="http://php.net/strpos">strpos</a> matching rules 
 		</td>
 		</tr>
@@ -1318,23 +1341,26 @@ disabled for now, no records to test against
 			// Process each order entry, relevant for items showing "x copy/ies ordered" or "being processed"
 			foreach ( $orderrows[1] as $orderrow)  // maybe this will never have more than 1 element? 
 			{
-				preg_match_all('/<td[^>]*>(.*)<\/td>/Usi', $orderrow, $order_rec); // $order_rec now has cell data
-					
-				// if order record was shown, put that status in our orders array
-				if ( !empty( $order_rec[1][0] ))
-					$orders[] = trim( force_balance_tags( wp_filter_nohtml_kses( $order_rec[1][0] )));
+				preg_match_all( '/<td[^>]*>(.*)<\/td>/Usi', $orderrow, $matches );
+
+				if( !empty( $prefs['reject_order'] ) && strpos( $orderrow, $prefs['reject_order'] ))
+					continue;
+
+				if( !empty( $prefs['require_order'] ))
+					if( strpos( $orderrow, $prefs['require_order'] ))
+						$orders[] = trim( force_balance_tags( wp_filter_nohtml_kses( $matches[1][0] )));
+					else
+						continue;
+				else
+					$orders[] = trim( force_balance_tags( wp_filter_nohtml_kses( $matches[1][0] )));
 			}
 			// End of Mike D
 
-			// Mike D, changed 4-9-9 to include ", 'orders' => $orders"
 			wp_cache_set( $sourceid , array('items' => $items, 'holdings' => $holdings, 'orders' => $orders, ) ,'scrib_availability', 86400 );
 		}else{
 			$items = $cache['items'];
 			$holdings = $cache['holdings'];
-			// Mike D, added 4-9-9: include order records in cache retrieval
-			// If bib record was found in WP cache, retrieve order status
 			$orders = $cache['orders'];
-			// End of Mike D
 		}
 
 
