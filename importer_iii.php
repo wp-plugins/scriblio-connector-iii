@@ -606,13 +606,13 @@ class ScribIII_import {
 		$atomic = $subjtemp = array();
 		
 		$marcrecord = str_replace("\n       ", ' ', $marcrecord);
-		
+
 		$details = explode( "\n", $marcrecord );
-		array_pop($details);
-		array_shift($details);
+		$details = array_values( array_filter( $details ));
 
 		$details[0] = str_replace('LEADER ', '000    ', $details[0]);
-		foreach($details as $line){		
+		foreach( $details as $line )
+		{
 			unset($lineray);
 			unset($marc);
 
@@ -777,6 +777,10 @@ class ScribIII_import {
 			}else if($lineray[0] == 246){
 				$marc = $this->iii_parse_row( $lineray );
 				$temp = trim(ereg_replace('/$', '', $marc['a1']) .' '. trim(ereg_replace('/$', '', $marc['b1']) .' '. trim(ereg_replace('/$', '', $marc['n1']) .' '. trim(ereg_replace('/$', '', $marc['p1'])))));
+				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $temp ));
+			}else if($lineray[0] == 210){
+				$marc = $this->iii_parse_row($lineray);
+				$temp = trim( $marc['a1'] );
 				$atomic['alttitle'][] = array( 'a' => $scrib->meditor_sanitize_punctuation( $temp ));
 			}else if(($lineray[0] > 719) && ($lineray[0] < 741)){
 				$marc = $this->iii_parse_row($lineray);
@@ -1185,17 +1189,15 @@ disabled for now, no records to test against
 		}
 		// end the big loop
 
-
-
 		// Records without _acqdates are reserves by course/professor
 		// we _can_ import them, but they don't have enough info
 		// to be findable or display well.
-		if(!$_acqdate[0] && !$atomic['creator'][0]){
-			$this->warn = 'Record number '. $bibn .' contains no catalog date or author info, skipped.';
+		if( !$_acqdate[0] && !( $atomic['creator'][0] || $atomic['published'][0] )){
+			$this->warn = 'Record number '. $bibn .' is missing catalog date, author, or publisher info; skipped.';
 			return( FALSE );
 		}
 		if(count( $atomic ) < 4){
-			$this->warn = 'Record number '. $bibn .' has too little cataloging data, skipped.';
+			$this->warn = 'Record number '. $bibn .' has too little cataloging data; skipped.';
 			return( FALSE );
 		}
 
