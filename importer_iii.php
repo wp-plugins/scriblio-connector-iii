@@ -114,6 +114,24 @@ class ScribIII_import {
 			$prefs['reject_availability'] = $_POST['scrib_iii-reject_availability'];
 			$prefs['require_order'] = $_POST['scrib_iii-require_order'];
 			$prefs['reject_order'] = $_POST['scrib_iii-reject_order'];
+			$prefs['save_category'] = wp_filter_nohtml_kses( $_POST['scrib_iii-save_category'] );
+			$prefs['save_user'] = sanitize_title_with_dashes( $_POST['scrib_iii-save_user'] );
+
+			// setup the catalog author, if it doesn't exist
+			if( ! get_user_by( 'login' , $prefs['save_user'] ))
+			{
+				// create the catalog author
+				$random_password = md5( uniqid( microtime() ));
+				$user_id = wp_create_user( $prefs['save_user'] , $random_password , $prefs['save_user'] .'@cataloger.scriblio.net' );
+				$user = new WP_User( $user_id );
+				$user->set_role( 'contributor' );
+				
+				$prefs['save_user_id'] = $user_id;
+			}
+			else
+			{
+				$prefs['save_user_id'] = get_user_by( 'login' , $prefs['save_user'] )->ID;
+			}
 
 			$save_prefs[ $prefs['sourceprefix'] ] = $prefs;
 
@@ -278,6 +296,24 @@ class ScribIII_import {
 		<td>
 		<input name="scrib_iii-reject_order" type="text" id="scrib_iii-reject_order" value="<?php echo format_to_edit( $prefs['reject_order'] ); ?>" /><br />
 		uses <a href="http://php.net/strpos">strpos</a> matching rules 
+		</td>
+		</tr>
+		</table>
+
+		<h3><?php _e('Saving Records') ?></h3>
+
+		<table class="form-table">
+		<tr valign="top">
+		<th scope="row"><?php _e('Category', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-save_category" type="text" id="scrib_iii-save_category" value="<?php echo !empty( $prefs['save_category'] ) ? format_to_edit( $prefs['save_category'] ) : __( 'Catalog' ); ?>" /><br />
+		</td>
+		</tr>
+		
+		<tr valign="top">
+		<th scope="row"><?php _e('Username', 'scrib') ?></th>
+		<td>
+		<input name="scrib_iii-save_user" type="text" id="scrib_iii-save_user" value="<?php echo !empty( $prefs['save_user'] ) ? format_to_edit( $prefs['save_user'] ) : __( 'cataloger' ); ?>" /><br />
 		</td>
 		</tr>
 		</table>
@@ -1261,6 +1297,8 @@ disabled for now, no records to test against
 			$atomic['_sourceid'] = $_sourceid;
 			$atomic['_title'] = $atomic['marcish']['title'][0]['a'];
 			$atomic['_idnumbers'] = $atomic['marcish']['idnumbers'];
+			$atomic['_userid'] = $prefs['save_user_id'];
+			$atomic['_category'] = $prefs['save_category'];
 
 			$scrib->import_insert_harvest( $atomic );
 			return( $atomic );
@@ -1270,7 +1308,6 @@ disabled for now, no records to test against
 		}
 
 	}
-
 
 	function iii_availability( &$post_id, &$sourceid ){
 		global $scrib;
